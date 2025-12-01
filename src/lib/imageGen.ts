@@ -34,10 +34,10 @@ function buildImagePrompt(details: CharacterDetails): string {
 
     switch (details.type) {
         case 'Character':
-            return `Fantasy character portrait, ${details.name}. ${description}. High fantasy art style, detailed face and expression, cinematic lighting, professional illustration, 8k resolution, painterly style, rich colors.`;
+            return `Fantasy character portrait, ${details.name}. ${description}. High bronze punk fantasy art style, detailed face and expression, cinematic lighting, professional illustration, 8k resolution, painterly style, rich colors.`;
 
         case 'Location':
-            return `Fantasy landscape illustration, ${details.name}. ${description}. Epic fantasy environment, atmospheric perspective, dramatic lighting, detailed architecture and nature, concept art style, 8k resolution, matte painting quality.`;
+            return `Fantasy landscape illustration, ${details.name}. ${description}. Epic bronze punk fantasy environment, atmospheric perspective, dramatic lighting, detailed architecture and nature, concept art style, 8k resolution, matte painting quality.`;
 
         case 'Item':
             return `Fantasy item illustration, ${details.name}. ${description}. Detailed artifact rendering, magical glow effects, intricate details, dark fantasy style, professional game art, 8k resolution, dramatic lighting.`;

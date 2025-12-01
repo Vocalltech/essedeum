@@ -648,8 +648,9 @@ function App() {
                   onMapUpload={handleMapUpload}
                 />
               )}
-              {rightSidebarTab === 'ai' && (
+              {rightSidebarTab === 'ai' && currentProject?.id && (
                 <AIChatPanel
+                  projectId={currentProject.id}
                   currentContent={selectedChapter?.content || selectedLore?.content || ''}
                   loreEntries={loreEntries}
                   relationships={relationships}

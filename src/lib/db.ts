@@ -70,6 +70,17 @@ export interface RelationshipWithDetails extends Relationship {
   target_type?: string;
 }
 
+// Memory types for the AI system
+export type MemoryType = 'plot_point' | 'world_rule' | 'character_decision' | 'style_note' | 'ai_insight';
+
+export interface ChatMemory {
+  id?: number;
+  project_id: number;
+  content: string;
+  type: MemoryType;
+  created_at: string;
+}
+
 /**
  * Initialize the database connection and create tables if they don't exist
  */
@@ -137,6 +148,18 @@ export async function initDB(): Promise<void> {
         FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
         FOREIGN KEY (source_id) REFERENCES lore(id) ON DELETE CASCADE,
         FOREIGN KEY (target_id) REFERENCES lore(id) ON DELETE CASCADE
+      )
+    `);
+
+    // Create chat_memories table for AI project memory
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS chat_memories (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        project_id INTEGER NOT NULL,
+        content TEXT NOT NULL,
+        type TEXT NOT NULL DEFAULT 'ai_insight',
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
       )
     `);
 
@@ -518,6 +541,164 @@ export async function deleteRelationship(id: number, projectId: number): Promise
     );
   } catch (error) {
     console.error("Failed to delete relationship:", error);
+    throw error;
+  }
+}
+
+// ==================== MEMORY OPERATIONS ====================
+
+/**
+ * Save a memory to the project
+ */
+export async function saveMemory(
+  projectId: number,
+  content: string,
+  type: MemoryType
+): Promise<number> {
+  const database = await ensureDB();
+
+  try {
+    const result = await database.execute(
+      "INSERT INTO chat_memories (project_id, content, type) VALUES (?, ?, ?)",
+      [projectId, content, type]
+    );
+
+    if (result.lastInsertId === undefined) {
+      throw new Error("Failed to get insert ID for memory");
+    }
+    return result.lastInsertId;
+  } catch (error) {
+    console.error("Failed to save memory:", error);
+    throw error;
+  }
+}
+
+/**
+ * Get recent memories for a project
+ */
+export async function getRecentMemories(
+  projectId: number,
+  limit: number = 10
+): Promise<ChatMemory[]> {
+  const database = await ensureDB();
+
+  try {
+    const result = await database.select<ChatMemory[]>(
+      "SELECT * FROM chat_memories WHERE project_id = ? ORDER BY created_at DESC LIMIT ?",
+      [projectId, limit]
+    );
+    return result;
+  } catch (error) {
+    console.error("Failed to get memories:", error);
+    throw error;
+  }
+}
+
+/**
+ * Get all memories for a project
+ */
+export async function getAllMemories(projectId: number): Promise<ChatMemory[]> {
+  const database = await ensureDB();
+
+  try {
+    const result = await database.select<ChatMemory[]>(
+      "SELECT * FROM chat_memories WHERE project_id = ? ORDER BY created_at DESC",
+      [projectId]
+    );
+    return result;
+  } catch (error) {
+    console.error("Failed to get all memories:", error);
+    throw error;
+  }
+}
+
+/**
+ * Delete a memory by ID
+ */
+export async function deleteMemory(id: number): Promise<void> {
+  const database = await ensureDB();
+
+  try {
+    await database.execute("DELETE FROM chat_memories WHERE id = ?", [id]);
+  } catch (error) {
+    console.error("Failed to delete memory:", error);
+    throw error;
+  }
+}
+
+/**
+ * Get random chapter excerpts for style analysis
+ */
+export async function getRandomChapterExcerpts(
+  projectId: number,
+  excerptCount: number = 3,
+  excerptLength: number = 500
+): Promise<string[]> {
+  const database = await ensureDB();
+
+  try {
+    // Get all chapters with content
+    const chapters = await database.select<Chapter[]>(
+      "SELECT * FROM chapters WHERE project_id = ? AND content != '' AND content IS NOT NULL",
+      [projectId]
+    );
+
+    if (chapters.length === 0) {
+      return [];
+    }
+
+    const excerpts: string[] = [];
+    const usedChapterIds = new Set<number>();
+
+    // Try to get excerpts from different chapters
+    for (let i = 0; i < excerptCount && usedChapterIds.size < chapters.length; i++) {
+      // Pick a random chapter we haven't used yet
+      const availableChapters = chapters.filter(c => c.id && !usedChapterIds.has(c.id));
+      if (availableChapters.length === 0) break;
+
+      const randomIndex = Math.floor(Math.random() * availableChapters.length);
+      const chapter = availableChapters[randomIndex];
+
+      if (chapter.id) {
+        usedChapterIds.add(chapter.id);
+      }
+
+      // Extract plain text from HTML content
+      const plainText = chapter.content
+        .replace(/<[^>]*>/g, ' ')
+        .replace(/&nbsp;/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+      if (plainText.length < 50) continue; // Skip very short content
+
+      // Pick a random starting position
+      const maxStart = Math.max(0, plainText.length - excerptLength);
+      const startPos = Math.floor(Math.random() * maxStart);
+
+      // Extract excerpt, trying to start/end at word boundaries
+      let excerpt = plainText.substring(startPos, startPos + excerptLength);
+
+      // Try to start at a word boundary
+      const firstSpace = excerpt.indexOf(' ');
+      if (firstSpace > 0 && firstSpace < 50) {
+        excerpt = excerpt.substring(firstSpace + 1);
+      }
+
+      // Try to end at a word boundary
+      const lastSpace = excerpt.lastIndexOf(' ');
+      if (lastSpace > excerpt.length - 50) {
+        excerpt = excerpt.substring(0, lastSpace);
+      }
+
+      if (excerpt.length > 50) {
+        excerpts.push(`[From "${chapter.title}"]: ${excerpt}`);
+      }
+    }
+
+    return excerpts;
+  } catch (error) {
+    console.error("Failed to get chapter excerpts:", error);
     throw error;
   }
 }
