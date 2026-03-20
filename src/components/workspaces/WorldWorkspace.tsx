@@ -490,7 +490,7 @@ export function WorldWorkspace({
                             <img
                               src={selectedLore.image_data}
                               alt={selectedLore.title}
-                              className="w-full aspect-square object-cover rounded-lg border border-zinc-800 shadow-md"
+                              className="w-full aspect-video object-contain bg-black/50 rounded-lg border border-zinc-800 shadow-md"
                             />
                             <button
                               onClick={() =>
@@ -503,7 +503,7 @@ export function WorldWorkspace({
                           </div>
                         ) : (
                           <div className="space-y-3">
-                            <div className="w-full aspect-square rounded-lg border border-dashed border-zinc-800 flex items-center justify-center bg-zinc-900/50">
+                            <div className="w-full aspect-video rounded-lg border border-dashed border-zinc-800 flex items-center justify-center bg-zinc-900/50">
                               <span className="text-xs text-zinc-500">
                                 No image generated
                               </span>

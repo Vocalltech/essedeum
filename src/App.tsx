@@ -30,6 +30,7 @@ import { ExportWorkspace } from "./components/workspaces/ExportWorkspace";
 import { WorldWorkspace } from "./components/workspaces/WorldWorkspace";
 import { BinderTree } from "./components/workspaces/BinderTree";
 import { SnapshotPanel } from "./components/workspaces/SnapshotPanel";
+import { LoreReferencePanel } from "./components/workspaces/LoreReferencePanel";
 import { LORE_TEMPLATES } from "./lib/templates";
 import {
   initDB,
@@ -569,7 +570,6 @@ function App() {
           projects={projects}
           onSelectChapter={(chapter) => {
             setSelectedChapter(chapter);
-            setSelectedLore(null);
           }}
           onSelectLore={(lore) => {
             setSelectedLore(lore);
@@ -721,7 +721,6 @@ function App() {
                       editingChapterId={editingChapterId}
                       onSelect={(c) => {
                         setSelectedChapter(c);
-                        setSelectedLore(null);
                       }}
                       onDoubleClick={(id) => setEditingChapterId(id)}
                       onTitleChange={handleTitleChange}
@@ -908,7 +907,6 @@ function App() {
                             const ch = chapters.find((c) => c.id === tab.id);
                             if (ch) {
                               setSelectedChapter(ch);
-                              setSelectedLore(null);
                             }
                           }}
                           className={`flex items-center gap-2 px-4 py-2 border-r border-zinc-800 text-sm min-w-32 max-w-48 group transition-colors flex-shrink-0 ${
@@ -1060,23 +1058,35 @@ function App() {
 
                   {/* Tab Content */}
                   <div className="flex-1 overflow-hidden">
-                    {rightSidebarTab === "wiki" && (
-                      <WikiPanel
-                        loreEntries={loreEntries}
-                        chapters={chapters}
-                        relationships={relationships}
-                        onAddLore={handleAddLore}
-                        onSelectLore={(lore) => {
-                          setSelectedLore(lore);
-                          setSelectedChapter(null);
-                        }}
-                        onAddRelationship={handleAddRelationship}
-                        onDeleteRelationship={handleDeleteRelationship}
-                        onUpdateLoreImage={handleUpdateLoreImage}
-                        selectedLoreId={selectedLore?.id}
-                        apiKey={apiKey}
-                      />
-                    )}
+                    {rightSidebarTab === "wiki" &&
+                      (selectedLore ? (
+                        <LoreReferencePanel
+                          lore={selectedLore}
+                          relationships={relationships}
+                          onClose={() => setSelectedLore(null)}
+                          onLoreClick={(loreId) => {
+                            const lore = loreEntries.find(
+                              (l) => l.id === loreId,
+                            );
+                            if (lore) setSelectedLore(lore);
+                          }}
+                        />
+                      ) : (
+                        <WikiPanel
+                          loreEntries={loreEntries}
+                          chapters={chapters}
+                          relationships={relationships}
+                          onAddLore={handleAddLore}
+                          onSelectLore={(lore) => {
+                            setSelectedLore(lore);
+                          }}
+                          onAddRelationship={handleAddRelationship}
+                          onDeleteRelationship={handleDeleteRelationship}
+                          onUpdateLoreImage={handleUpdateLoreImage}
+                          selectedLoreId={undefined}
+                          apiKey={apiKey}
+                        />
+                      ))}
 
                     {rightSidebarTab === "map" && currentProject?.id && (
                       <MapPanel
