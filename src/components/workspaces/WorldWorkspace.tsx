@@ -17,12 +17,22 @@ import {
   Sparkles,
   Link as LinkIcon,
   BookOpen,
+  Trash2,
+  Info,
 } from "lucide-react";
 import { WikiPanel } from "../WikiPanel";
 import { MapPanel } from "../MapPanel";
 import { AIChatPanel } from "../AIChatPanel";
 import { RelationshipWeb } from "./RelationshipWeb";
-import { Lore, Chapter, RelationshipWithDetails } from "../../lib/db";
+import { Editor } from "../Editor";
+import { generateCharacterPortrait, base64ToDataUrl } from "../../lib/imageGen";
+import {
+  Lore,
+  Chapter,
+  RelationshipWithDetails,
+  saveLore,
+  deleteLore,
+} from "../../lib/db";
 
 interface WorldWorkspaceProps {
   loreEntries: Lore[];
@@ -77,15 +87,86 @@ export function WorldWorkspace({
   apiKey,
 }: WorldWorkspaceProps) {
   const [centerTab, setCenterTab] = useState<"wiki" | "map" | "graph">("wiki");
-  const [rightTab, setRightTab] = useState<"mentions" | "ai">("mentions");
+  const [rightTab, setRightTab] = useState<"details" | "mentions" | "ai">(
+    "details",
+  );
   const [searchQuery, setSearchQuery] = useState("");
+  const [deletedLoreIds, setDeletedLoreIds] = useState<Set<number>>(new Set());
+
+  const [isGeneratingImage, setIsGeneratingImage] = useState(false);
+  const [imageError, setImageError] = useState<string | null>(null);
+  const [isAddingRelationship, setIsAddingRelationship] = useState(false);
+  const [relationshipTargetId, setRelationshipTargetId] = useState<number | "">(
+    "",
+  );
+  const [relationshipLabel, setRelationshipLabel] = useState("");
+
+  const handleLoreContentChange = async (content: string) => {
+    if (!selectedLore) return;
+    selectedLore.content = content;
+    await saveLore(selectedLore);
+  };
+
+  const handleDeleteLore = async (e: React.MouseEvent, id: number) => {
+    e.stopPropagation();
+    try {
+      await deleteLore(id);
+      setDeletedLoreIds((prev) => new Set(prev).add(id));
+      if (selectedLore?.id === id) {
+        onSelectLore(null);
+      }
+    } catch (error) {
+      console.error("Failed to delete lore:", error);
+    }
+  };
+
+  const handleGenerateImage = async () => {
+    if (!selectedLore?.id || !apiKey) return;
+
+    setIsGeneratingImage(true);
+    setImageError(null);
+
+    try {
+      const result = await generateCharacterPortrait(apiKey, {
+        name: selectedLore.title,
+        type: selectedLore.type,
+        description: selectedLore.content,
+      });
+
+      if (result && result.base64) {
+        const imageUrl = base64ToDataUrl(result.base64, result.mimeType);
+        onUpdateLoreImage(selectedLore.id, imageUrl);
+        selectedLore.image_data = imageUrl; // Optimistic update
+      } else {
+        setImageError("Failed to generate image");
+      }
+    } catch (err) {
+      setImageError(err instanceof Error ? err.message : "An error occurred");
+    } finally {
+      setIsGeneratingImage(false);
+    }
+  };
+
+  const handleAddRelSubmit = () => {
+    if (!selectedLore?.id || !relationshipTargetId || !relationshipLabel.trim())
+      return;
+    onAddRelationship(
+      selectedLore.id,
+      Number(relationshipTargetId),
+      relationshipLabel.trim(),
+    );
+    setIsAddingRelationship(false);
+    setRelationshipTargetId("");
+    setRelationshipLabel("");
+  };
 
   // Filter and group lore entries
   const groupedLore = useMemo(() => {
     const filtered = loreEntries.filter(
       (lore) =>
-        lore.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        lore.type.toLowerCase().includes(searchQuery.toLowerCase()),
+        !deletedLoreIds.has(lore.id!) &&
+        (lore.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          lore.type.toLowerCase().includes(searchQuery.toLowerCase())),
     );
 
     const groups: Record<string, Lore[]> = {};
@@ -95,7 +176,7 @@ export function WorldWorkspace({
     });
 
     return groups;
-  }, [loreEntries, searchQuery]);
+  }, [loreEntries, searchQuery, deletedLoreIds]);
 
   // Find chapters where the selected lore is mentioned
   const mentions = useMemo(() => {
@@ -156,20 +237,27 @@ export function WorldWorkspace({
                       {type}s
                     </div>
                     {entries.map((lore) => (
-                      <button
+                      <div
                         key={lore.id}
                         onClick={() => {
                           onSelectLore(lore);
                           setCenterTab("wiki");
                         }}
-                        className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
+                        className={`group w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm transition-colors cursor-pointer ${
                           selectedLore?.id === lore.id
                             ? "bg-indigo-600/20 text-indigo-300"
                             : "text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-300"
                         }`}
                       >
-                        {lore.title}
-                      </button>
+                        <span className="truncate">{lore.title}</span>
+                        <button
+                          onClick={(e) => handleDeleteLore(e, lore.id!)}
+                          className="opacity-0 group-hover:opacity-100 p-1 hover:bg-zinc-700/50 rounded text-zinc-500 hover:text-red-400 transition-all shrink-0"
+                          title="Delete Entry"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     ))}
                   </div>
                 );
@@ -262,19 +350,44 @@ export function WorldWorkspace({
         <div className="flex-1 flex overflow-hidden relative">
           {centerTab === "wiki" && (
             <div className="w-full h-full overflow-hidden flex justify-center">
-              <div className="w-full max-w-4xl h-full border-x border-zinc-800 bg-zinc-900 shadow-2xl">
-                <WikiPanel
-                  loreEntries={loreEntries}
-                  chapters={chapters}
-                  relationships={relationships}
-                  onAddLore={onAddLore}
-                  onSelectLore={onSelectLore}
-                  onAddRelationship={onAddRelationship}
-                  onDeleteRelationship={onDeleteRelationship}
-                  onUpdateLoreImage={onUpdateLoreImage}
-                  selectedLoreId={selectedLore?.id}
-                  apiKey={apiKey || ""}
-                />
+              <div className="w-full max-w-4xl h-full border-x border-zinc-800 bg-zinc-900 shadow-2xl flex flex-col">
+                {selectedLore ? (
+                  <>
+                    <div className="px-8 py-4 border-b border-zinc-800 bg-zinc-900 shrink-0">
+                      <div className="font-bold text-zinc-100 text-2xl">
+                        {selectedLore.title}
+                      </div>
+                      <div className="text-sm text-zinc-500 mt-1">
+                        {selectedLore.type}
+                      </div>
+                    </div>
+                    <div className="flex-1 overflow-hidden [&_.ProseMirror]:min-h-full">
+                      <Editor
+                        content={selectedLore.content}
+                        onChange={handleLoreContentChange}
+                        placeholder={`Write about this ${selectedLore.type.toLowerCase()}... Type @ to mention other entries.`}
+                        loreEntries={loreEntries.filter(
+                          (l) => !deletedLoreIds.has(l.id!),
+                        )}
+                      />
+                    </div>
+                  </>
+                ) : (
+                  <WikiPanel
+                    loreEntries={loreEntries.filter(
+                      (l) => !deletedLoreIds.has(l.id!),
+                    )}
+                    chapters={chapters}
+                    relationships={relationships}
+                    onAddLore={onAddLore}
+                    onSelectLore={onSelectLore}
+                    onAddRelationship={onAddRelationship}
+                    onDeleteRelationship={onDeleteRelationship}
+                    onUpdateLoreImage={onUpdateLoreImage}
+                    selectedLoreId={undefined}
+                    apiKey={apiKey || ""}
+                  />
+                )}
               </div>
             </div>
           )}
@@ -321,6 +434,17 @@ export function WorldWorkspace({
             <div className="px-2 py-2 border-b border-zinc-800">
               <div className="flex bg-zinc-800 rounded-lg p-1">
                 <button
+                  onClick={() => setRightTab("details")}
+                  className={`flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                    rightTab === "details"
+                      ? "bg-indigo-600 text-white"
+                      : "text-zinc-400 hover:text-zinc-300"
+                  }`}
+                >
+                  <Info className="w-3.5 h-3.5" />
+                  Details
+                </button>
+                <button
                   onClick={() => setRightTab("mentions")}
                   className={`flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-md text-xs font-medium transition-colors ${
                     rightTab === "mentions"
@@ -347,6 +471,221 @@ export function WorldWorkspace({
 
             {/* Right Tab Content */}
             <div className="flex-1 overflow-y-auto">
+              {rightTab === "details" && (
+                <div className="p-4 space-y-6">
+                  {!selectedLore ? (
+                    <div className="text-center text-sm text-zinc-500 mt-8">
+                      Select a lore entry to view details.
+                    </div>
+                  ) : (
+                    <>
+                      {/* Image Section */}
+                      <div>
+                        <h3 className="text-sm font-semibold text-zinc-300 mb-3 flex items-center gap-2">
+                          <Sparkles className="w-4 h-4 text-indigo-400" />
+                          AI Visualization
+                        </h3>
+                        {selectedLore.image_data ? (
+                          <div className="space-y-3">
+                            <img
+                              src={selectedLore.image_data}
+                              alt={selectedLore.title}
+                              className="w-full aspect-square object-cover rounded-lg border border-zinc-800 shadow-md"
+                            />
+                            <button
+                              onClick={() =>
+                                onUpdateLoreImage(selectedLore.id!, "")
+                              }
+                              className="w-full px-3 py-2 text-xs text-red-400 hover:text-red-300 hover:bg-red-400/10 rounded transition-colors"
+                            >
+                              Remove Image
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="space-y-3">
+                            <div className="w-full aspect-square rounded-lg border border-dashed border-zinc-800 flex items-center justify-center bg-zinc-900/50">
+                              <span className="text-xs text-zinc-500">
+                                No image generated
+                              </span>
+                            </div>
+                            <button
+                              onClick={handleGenerateImage}
+                              disabled={isGeneratingImage || !apiKey}
+                              className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white rounded-lg text-xs font-medium transition-colors"
+                            >
+                              {isGeneratingImage ? (
+                                <>
+                                  <Sparkles className="w-3.5 h-3.5 animate-spin" />
+                                  Generating...
+                                </>
+                              ) : (
+                                <>
+                                  <Sparkles className="w-3.5 h-3.5" />
+                                  Generate AI Image
+                                </>
+                              )}
+                            </button>
+                            {imageError && (
+                              <p className="text-xs text-red-400 text-center mt-2">
+                                {imageError}
+                              </p>
+                            )}
+                            {!apiKey && (
+                              <p className="text-[10px] text-zinc-500 text-center mt-2">
+                                Set Google Gemini API key in chat settings to
+                                generate images.
+                              </p>
+                            )}
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="w-full h-px bg-zinc-800" />
+
+                      {/* Relationships Section */}
+                      <div>
+                        <div className="flex items-center justify-between mb-3">
+                          <h3 className="text-sm font-semibold text-zinc-300 flex items-center gap-2">
+                            <LinkIcon className="w-4 h-4 text-indigo-400" />
+                            Relationships
+                          </h3>
+                          <button
+                            onClick={() =>
+                              setIsAddingRelationship(!isAddingRelationship)
+                            }
+                            className="p-1 hover:bg-zinc-800 rounded text-zinc-400 hover:text-zinc-200 transition-colors"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+
+                        {isAddingRelationship && (
+                          <div className="mb-4 p-3 bg-zinc-950 border border-zinc-800 rounded-lg space-y-3">
+                            <select
+                              value={relationshipTargetId}
+                              onChange={(e) =>
+                                setRelationshipTargetId(Number(e.target.value))
+                              }
+                              className="w-full bg-zinc-900 border border-zinc-700 rounded px-2 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-indigo-500"
+                            >
+                              <option value="">Select target...</option>
+                              {loreEntries
+                                .filter(
+                                  (l) =>
+                                    l.id !== selectedLore.id &&
+                                    !deletedLoreIds.has(l.id!),
+                                )
+                                .map((l) => (
+                                  <option key={l.id} value={l.id}>
+                                    {l.title} ({l.type})
+                                  </option>
+                                ))}
+                            </select>
+                            <input
+                              type="text"
+                              value={relationshipLabel}
+                              onChange={(e) =>
+                                setRelationshipLabel(e.target.value)
+                              }
+                              placeholder="Relationship (e.g. Enemies)"
+                              className="w-full bg-zinc-900 border border-zinc-700 rounded px-2 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-indigo-500"
+                              onKeyDown={(e) =>
+                                e.key === "Enter" && handleAddRelSubmit()
+                              }
+                            />
+                            <div className="flex justify-end gap-2">
+                              <button
+                                onClick={() => setIsAddingRelationship(false)}
+                                className="px-2 py-1 text-xs text-zinc-400 hover:text-zinc-200"
+                              >
+                                Cancel
+                              </button>
+                              <button
+                                onClick={handleAddRelSubmit}
+                                disabled={
+                                  !relationshipTargetId ||
+                                  !relationshipLabel.trim()
+                                }
+                                className="px-2 py-1 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white rounded text-xs transition-colors"
+                              >
+                                Add
+                              </button>
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="space-y-2">
+                          {relationships
+                            .filter(
+                              (r) =>
+                                r.source_id === selectedLore.id ||
+                                r.target_id === selectedLore.id,
+                            )
+                            .map((rel) => {
+                              const isSource =
+                                rel.source_id === selectedLore.id;
+                              const otherTitle = isSource
+                                ? rel.target_title
+                                : rel.source_title;
+                              const otherType = isSource
+                                ? rel.target_type
+                                : rel.source_type;
+                              const otherId = isSource
+                                ? rel.target_id
+                                : rel.source_id;
+
+                              return (
+                                <div
+                                  key={rel.id}
+                                  className="flex items-center justify-between p-2 bg-zinc-950 border border-zinc-800 rounded-lg group"
+                                >
+                                  <div className="flex flex-col min-w-0">
+                                    <span className="text-xs text-zinc-500 truncate">
+                                      {rel.label}
+                                    </span>
+                                    <button
+                                      onClick={() => {
+                                        const otherLore = loreEntries.find(
+                                          (l) => l.id === otherId,
+                                        );
+                                        if (otherLore) onSelectLore(otherLore);
+                                      }}
+                                      className="text-sm font-medium text-indigo-400 hover:text-indigo-300 hover:underline truncate text-left"
+                                    >
+                                      {otherTitle}{" "}
+                                      <span className="text-[10px] text-zinc-600 font-normal">
+                                        ({otherType})
+                                      </span>
+                                    </button>
+                                  </div>
+                                  <button
+                                    onClick={() =>
+                                      onDeleteRelationship(rel.id!)
+                                    }
+                                    className="p-1.5 opacity-0 group-hover:opacity-100 hover:bg-zinc-800 rounded text-zinc-500 hover:text-red-400 transition-all shrink-0"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              );
+                            })}
+                          {relationships.filter(
+                            (r) =>
+                              r.source_id === selectedLore.id ||
+                              r.target_id === selectedLore.id,
+                          ).length === 0 &&
+                            !isAddingRelationship && (
+                              <p className="text-xs text-zinc-500 text-center py-4">
+                                No relationships defined.
+                              </p>
+                            )}
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+
               {rightTab === "mentions" && (
                 <div className="p-4 space-y-4">
                   {!selectedLore ? (

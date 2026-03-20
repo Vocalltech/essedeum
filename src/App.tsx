@@ -455,24 +455,6 @@ function App() {
     }
   };
 
-  // Update lore content
-  const handleLoreContentChange = async (content: string) => {
-    if (!selectedLore) return;
-
-    const updatedLore = { ...selectedLore, content };
-    setSelectedLore(updatedLore);
-
-    try {
-      await saveLore(updatedLore);
-
-      setLoreEntries(
-        loreEntries.map((l) => (l.id === updatedLore.id ? updatedLore : l)),
-      );
-    } catch (error) {
-      console.error("Failed to save lore:", error);
-    }
-  };
-
   // Add a new relationship
   const handleAddRelationship = async (
     sourceId: number,
@@ -592,6 +574,7 @@ function App() {
           onSelectLore={(lore) => {
             setSelectedLore(lore);
             setSelectedChapter(null);
+            setActiveMode("world");
           }}
           onSelectProject={(project) => {
             setCurrentProject(project);
@@ -907,64 +890,50 @@ function App() {
               </div>
 
               {/* Editor Tabs */}
-              {openTabs.length > 0 && (
+              {openTabs.filter((t) => t.type === "chapter").length > 0 && (
                 <div className="flex bg-zinc-900 border-b border-zinc-800 overflow-x-auto overflow-y-hidden no-scrollbar">
-                  {openTabs.map((tab) => {
-                    const isActive =
-                      (tab.type === "chapter" &&
-                        selectedChapter?.id === tab.id) ||
-                      (tab.type === "lore" && selectedLore?.id === tab.id);
-                    const title =
-                      tab.type === "chapter"
-                        ? chapters.find((c) => c.id === tab.id)?.title ||
-                          "Unknown Chapter"
-                        : loreEntries.find((l) => l.id === tab.id)?.title ||
-                          "Unknown Lore";
-                    const Icon = tab.type === "chapter" ? Book : List;
+                  {openTabs
+                    .filter((t) => t.type === "chapter")
+                    .map((tab) => {
+                      const isActive = selectedChapter?.id === tab.id;
+                      const title =
+                        chapters.find((c) => c.id === tab.id)?.title ||
+                        "Unknown Chapter";
+                      const Icon = Book;
 
-                    return (
-                      <button
-                        key={`${tab.type}-${tab.id}`}
-                        onClick={() => {
-                          if (tab.type === "chapter") {
+                      return (
+                        <button
+                          key={`${tab.type}-${tab.id}`}
+                          onClick={() => {
                             const ch = chapters.find((c) => c.id === tab.id);
                             if (ch) {
                               setSelectedChapter(ch);
                               setSelectedLore(null);
                             }
-                          } else {
-                            const lore = loreEntries.find(
-                              (l) => l.id === tab.id,
-                            );
-                            if (lore) {
-                              setSelectedLore(lore);
-                              setSelectedChapter(null);
-                            }
-                          }
-                        }}
-                        className={`flex items-center gap-2 px-4 py-2 border-r border-zinc-800 text-sm min-w-32 max-w-48 group transition-colors flex-shrink-0 ${
-                          isActive
-                            ? "bg-zinc-800 text-zinc-100"
-                            : "text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-300"
-                        }`}
-                      >
-                        <Icon className="w-3.5 h-3.5 shrink-0" />
-                        <span className="truncate flex-1 text-left">
-                          {title}
-                        </span>
-                        <div
-                          onClick={(e) => closeTab(e, tab.type, tab.id)}
-                          className={`p-0.5 rounded-md hover:bg-zinc-700 transition-colors ml-1 ${
+                          }}
+                          className={`flex items-center gap-2 px-4 py-2 border-r border-zinc-800 text-sm min-w-32 max-w-48 group transition-colors flex-shrink-0 ${
                             isActive
-                              ? "opacity-100 text-zinc-400 hover:text-zinc-200"
-                              : "opacity-0 group-hover:opacity-100"
+                              ? "bg-zinc-800 text-zinc-100"
+                              : "text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-300"
                           }`}
                         >
-                          <X className="w-3 h-3" />
-                        </div>
-                      </button>
-                    );
-                  })}
+                          <Icon className="w-3.5 h-3.5 shrink-0" />
+                          <span className="truncate flex-1 text-left">
+                            {title}
+                          </span>
+                          <div
+                            onClick={(e) => closeTab(e, tab.type, tab.id)}
+                            className={`p-0.5 rounded-md hover:bg-zinc-700 transition-colors ml-1 ${
+                              isActive
+                                ? "opacity-100 text-zinc-400 hover:text-zinc-200"
+                                : "opacity-0 group-hover:opacity-100"
+                            }`}
+                          >
+                            <X className="w-3 h-3" />
+                          </div>
+                        </button>
+                      );
+                    })}
                 </div>
               )}
 
@@ -995,35 +964,12 @@ function App() {
                       />
                     </div>
                   </div>
-                ) : selectedLore ? (
-                  <div
-                    className={`mx-auto w-full flex-1 flex flex-col ${zenMode ? "" : editorWidth} ${editorFont} ${editorFontSize}`}
-                  >
-                    <div className="px-8 py-4 border-b border-zinc-800 bg-zinc-900">
-                      <div
-                        className={`font-bold text-zinc-100 ${editorFontSize === "text-sm" ? "text-xl" : editorFontSize === "text-lg" ? "text-3xl" : "text-2xl"}`}
-                      >
-                        {selectedLore.title}
-                      </div>
-                      <div className="text-sm text-zinc-500 mt-1">
-                        {selectedLore.type}
-                      </div>
-                    </div>
-                    <div className="flex-1 min-h-0 [&_.ProseMirror]:min-h-full">
-                      <Editor
-                        content={selectedLore.content}
-                        onChange={handleLoreContentChange}
-                        placeholder={`Write about this ${selectedLore.type.toLowerCase()}... Type @ to mention other entries.`}
-                        loreEntries={loreEntries}
-                      />
-                    </div>
-                  </div>
                 ) : (
                   <div className="flex-1 flex items-center justify-center text-zinc-500">
                     <div className="text-center">
                       <Book className="w-16 h-16 mx-auto mb-4 opacity-50" />
                       <p className="text-lg mb-6">
-                        Select a chapter or lore entry to start writing
+                        Select a chapter to start writing
                       </p>
                       <div className="flex items-center justify-center gap-4">
                         <button
@@ -1032,13 +978,6 @@ function App() {
                         >
                           <Plus className="w-4 h-4" />
                           Create Chapter
-                        </button>
-                        <button
-                          onClick={() => setRightSidebarTab("wiki")}
-                          className="flex items-center gap-2 px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-zinc-100 rounded-lg transition-colors border border-zinc-700"
-                        >
-                          <List className="w-4 h-4" />
-                          Create Lore
                         </button>
                       </div>
                       <div className="mt-8 text-sm text-zinc-600">
