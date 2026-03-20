@@ -1,13 +1,13 @@
-import { useEditor, EditorContent, ReactRenderer } from '@tiptap/react';
-import StarterKit from '@tiptap/starter-kit';
-import Placeholder from '@tiptap/extension-placeholder';
-import Mention from '@tiptap/extension-mention';
-import { useEffect, useRef, useCallback } from 'react';
-import { Save } from 'lucide-react';
-import tippy, { Instance as TippyInstance } from 'tippy.js';
-import 'tippy.js/dist/tippy.css';
-import { MentionList, MentionListRef, MentionItem } from './MentionList';
-import { Lore } from '../lib/db';
+import { useEditor, EditorContent, ReactRenderer } from "@tiptap/react";
+import StarterKit from "@tiptap/starter-kit";
+import Placeholder from "@tiptap/extension-placeholder";
+import Mention from "@tiptap/extension-mention";
+import { useEffect, useRef, useCallback } from "react";
+import { Save } from "lucide-react";
+import tippy, { Instance as TippyInstance } from "tippy.js";
+import "tippy.js/dist/tippy.css";
+import { MentionList, MentionListRef, MentionItem } from "./MentionList";
+import { Lore } from "../lib/db";
 
 interface EditorProps {
   content: string;
@@ -16,11 +16,11 @@ interface EditorProps {
   loreEntries?: Lore[];
 }
 
-export function Editor({ 
-  content, 
-  onChange, 
+export function Editor({
+  content,
+  onChange,
   placeholder = "Start writing your story...",
-  loreEntries = []
+  loreEntries = [],
 }: EditorProps) {
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const loreEntriesRef = useRef<Lore[]>(loreEntries);
@@ -30,19 +30,22 @@ export function Editor({
     loreEntriesRef.current = loreEntries;
   }, [loreEntries]);
 
-  const getSuggestionItems = useCallback(({ query }: { query: string }): MentionItem[] => {
-    const items = loreEntriesRef.current
-      .filter((item) =>
-        item.title.toLowerCase().includes(query.toLowerCase())
-      )
-      .slice(0, 10)
-      .map((item) => ({
-        id: item.id!,
-        title: item.title,
-        type: item.type,
-      }));
-    return items;
-  }, []);
+  const getSuggestionItems = useCallback(
+    ({ query }: { query: string }): MentionItem[] => {
+      const items = loreEntriesRef.current
+        .filter((item) =>
+          item.title.toLowerCase().includes(query.toLowerCase()),
+        )
+        .slice(0, 10)
+        .map((item) => ({
+          id: item.id!,
+          title: item.title,
+          type: item.type,
+        }));
+      return items;
+    },
+    [],
+  );
 
   const editor = useEditor({
     extensions: [
@@ -56,15 +59,15 @@ export function Editor({
       }),
       Mention.configure({
         HTMLAttributes: {
-          class: 'mention',
+          class: "mention",
         },
         renderHTML({ options, node }) {
           return [
-            'span',
+            "span",
             {
               ...options.HTMLAttributes,
-              'data-type': node.attrs.type || 'Character',
-              'data-id': node.attrs.id,
+              "data-type": node.attrs.type || "Character",
+              "data-id": node.attrs.id,
             },
             `@${node.attrs.label}`,
           ];
@@ -86,15 +89,15 @@ export function Editor({
                   return;
                 }
 
-                popup = tippy('body', {
+                popup = tippy("body", {
                   getReferenceClientRect: props.clientRect as () => DOMRect,
                   appendTo: () => document.body,
                   content: component.element,
                   showOnCreate: true,
                   interactive: true,
-                  trigger: 'manual',
-                  placement: 'bottom-start',
-                  theme: 'dark',
+                  trigger: "manual",
+                  placement: "bottom-start",
+                  theme: "dark",
                 });
               },
 
@@ -111,7 +114,7 @@ export function Editor({
               },
 
               onKeyDown(props) {
-                if (props.event.key === 'Escape') {
+                if (props.event.key === "Escape") {
                   popup?.[0]?.hide();
                   return true;
                 }
@@ -131,7 +134,8 @@ export function Editor({
     content,
     editorProps: {
       attributes: {
-        class: 'prose prose-invert prose-zinc max-w-none focus:outline-none min-h-screen px-8 py-6',
+        class:
+          "prose prose-invert prose-zinc max-w-none focus:outline-none min-h-full px-8 py-6",
       },
     },
     onUpdate: ({ editor }) => {
@@ -145,7 +149,7 @@ export function Editor({
 
       // Debounce save for 2 seconds
       saveTimeoutRef.current = setTimeout(() => {
-        console.log('Saving...');
+        console.log("Saving...");
       }, 2000);
     },
   });
@@ -234,9 +238,9 @@ export function Editor({
           <button
             onClick={() => editor.chain().focus().toggleBold().run()}
             className={`px-3 py-1 rounded text-sm transition-colors ${
-              editor.isActive('bold')
-                ? 'bg-zinc-700 text-zinc-100'
-                : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-100'
+              editor.isActive("bold")
+                ? "bg-zinc-700 text-zinc-100"
+                : "bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-100"
             }`}
           >
             Bold
@@ -244,47 +248,57 @@ export function Editor({
           <button
             onClick={() => editor.chain().focus().toggleItalic().run()}
             className={`px-3 py-1 rounded text-sm transition-colors ${
-              editor.isActive('italic')
-                ? 'bg-zinc-700 text-zinc-100'
-                : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-100'
+              editor.isActive("italic")
+                ? "bg-zinc-700 text-zinc-100"
+                : "bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-100"
             }`}
           >
             Italic
           </button>
           <div className="w-px h-6 bg-zinc-700" />
           <button
-            onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
+            onClick={() =>
+              editor.chain().focus().toggleHeading({ level: 1 }).run()
+            }
             className={`px-3 py-1 rounded text-sm transition-colors ${
-              editor.isActive('heading', { level: 1 })
-                ? 'bg-zinc-700 text-zinc-100'
-                : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-100'
+              editor.isActive("heading", { level: 1 })
+                ? "bg-zinc-700 text-zinc-100"
+                : "bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-100"
             }`}
           >
             H1
           </button>
           <button
-            onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
+            onClick={() =>
+              editor.chain().focus().toggleHeading({ level: 2 }).run()
+            }
             className={`px-3 py-1 rounded text-sm transition-colors ${
-              editor.isActive('heading', { level: 2 })
-                ? 'bg-zinc-700 text-zinc-100'
-                : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-100'
+              editor.isActive("heading", { level: 2 })
+                ? "bg-zinc-700 text-zinc-100"
+                : "bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-100"
             }`}
           >
             H2
           </button>
           <button
-            onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
+            onClick={() =>
+              editor.chain().focus().toggleHeading({ level: 3 }).run()
+            }
             className={`px-3 py-1 rounded text-sm transition-colors ${
-              editor.isActive('heading', { level: 3 })
-                ? 'bg-zinc-700 text-zinc-100'
-                : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-100'
+              editor.isActive("heading", { level: 3 })
+                ? "bg-zinc-700 text-zinc-100"
+                : "bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-100"
             }`}
           >
             H3
           </button>
           <div className="w-px h-6 bg-zinc-700" />
           <span className="text-xs text-zinc-500">
-            Type <kbd className="px-1.5 py-0.5 bg-zinc-800 rounded text-zinc-400">@</kbd> to mention
+            Type{" "}
+            <kbd className="px-1.5 py-0.5 bg-zinc-800 rounded text-zinc-400">
+              @
+            </kbd>{" "}
+            to mention
           </span>
         </div>
         <div className="flex items-center gap-2 text-xs text-zinc-500">
