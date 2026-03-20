@@ -1,11 +1,18 @@
-import { useEffect, useState } from 'react';
-import { Book, Plus, Trash2, FolderOpen, List, GitBranch, Sparkles, Map } from 'lucide-react';
-import { Editor } from './components/Editor';
-import { WikiPanel } from './components/WikiPanel';
-import { AIChatPanel } from './components/AIChatPanel';
-import { ProjectSelector } from './components/ProjectSelector';
-import { GraphView } from './components/GraphView';
-import { MapPanel } from './components/MapPanel';
+import { useEffect, useState } from "react";
+import {
+  Book,
+  Plus,
+  Trash2,
+  FolderOpen,
+  List,
+  Sparkles,
+  Map,
+} from "lucide-react";
+import { Editor } from "./components/Editor";
+import { WikiPanel } from "./components/WikiPanel";
+import { AIChatPanel } from "./components/AIChatPanel";
+import { ProjectSelector } from "./components/ProjectSelector";
+import { MapPanel } from "./components/MapPanel";
 import {
   initDB,
   getProjects,
@@ -25,9 +32,9 @@ import {
   Chapter,
   Lore,
   RelationshipWithDetails,
-} from './lib/db';
+} from "./lib/db";
 
-const API_KEY_STORAGE_KEY = 'essedeum_gemini_api_key';
+const API_KEY_STORAGE_KEY = "essedeum_gemini_api_key";
 
 function App() {
   const [projects, setProjects] = useState<Project[]>([]);
@@ -36,40 +43,46 @@ function App() {
   const [selectedChapter, setSelectedChapter] = useState<Chapter | null>(null);
   const [loreEntries, setLoreEntries] = useState<Lore[]>([]);
   const [selectedLore, setSelectedLore] = useState<Lore | null>(null);
-  const [relationships, setRelationships] = useState<RelationshipWithDetails[]>([]);
+  const [relationships, setRelationships] = useState<RelationshipWithDetails[]>(
+    [],
+  );
   const [isLoading, setIsLoading] = useState(true);
   const [editingChapterId, setEditingChapterId] = useState<number | null>(null);
   const [showProjectSelector, setShowProjectSelector] = useState(false);
-  const [rightSidebarTab, setRightSidebarTab] = useState<'wiki' | 'graph' | 'ai' | 'map'>('wiki');
-  const [mapImageData, setMapImageData] = useState<string | undefined>(undefined);
-  
+  const [rightSidebarTab, setRightSidebarTab] = useState<
+    "wiki" | "graph" | "ai" | "map"
+  >("wiki");
+  const [mapImageData, setMapImageData] = useState<string | undefined>(
+    undefined,
+  );
+
   // Get API key from localStorage
-  const [apiKey, setApiKey] = useState<string>('');
-  
+  const [apiKey, setApiKey] = useState<string>("");
+
   useEffect(() => {
     const savedKey = localStorage.getItem(API_KEY_STORAGE_KEY);
     if (savedKey) {
       setApiKey(savedKey);
     }
-    
+
     // Listen for storage changes (when API key is set in AIChatPanel)
     const handleStorageChange = () => {
       const key = localStorage.getItem(API_KEY_STORAGE_KEY);
-      setApiKey(key || '');
+      setApiKey(key || "");
     };
-    
-    window.addEventListener('storage', handleStorageChange);
-    
+
+    window.addEventListener("storage", handleStorageChange);
+
     // Also check periodically for changes in the same tab
     const interval = setInterval(() => {
       const key = localStorage.getItem(API_KEY_STORAGE_KEY);
       if (key !== apiKey) {
-        setApiKey(key || '');
+        setApiKey(key || "");
       }
     }, 1000);
-    
+
     return () => {
-      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener("storage", handleStorageChange);
       clearInterval(interval);
     };
   }, [apiKey]);
@@ -78,13 +91,13 @@ function App() {
   useEffect(() => {
     async function initialize() {
       try {
-        console.log('Initializing database...');
+        console.log("Initializing database...");
         await initDB();
-        console.log('Database initialized, loading projects...');
+        console.log("Database initialized, loading projects...");
         await loadProjects();
-        console.log('Projects loaded');
+        console.log("Projects loaded");
       } catch (error) {
-        console.error('Failed to initialize app:', error);
+        console.error("Failed to initialize app:", error);
       } finally {
         setIsLoading(false);
       }
@@ -110,7 +123,7 @@ function App() {
   const loadProjects = async () => {
     try {
       const loadedProjects = await getProjects();
-      console.log('Loaded projects:', loadedProjects);
+      console.log("Loaded projects:", loadedProjects);
       setProjects(loadedProjects);
 
       // Auto-select first project if none selected
@@ -121,18 +134,19 @@ function App() {
         setShowProjectSelector(true);
       }
     } catch (error) {
-      console.error('Failed to load projects:', error);
+      console.error("Failed to load projects:", error);
     }
   };
 
   // Load chapters, lore, and relationships for a project
   const loadProjectData = async (projectId: number) => {
     try {
-      const [loadedChapters, loadedLore, loadedRelationships] = await Promise.all([
-        getChapters(projectId),
-        getLore(projectId),
-        getRelationships(projectId),
-      ]);
+      const [loadedChapters, loadedLore, loadedRelationships] =
+        await Promise.all([
+          getChapters(projectId),
+          getLore(projectId),
+          getRelationships(projectId),
+        ]);
 
       setChapters(loadedChapters);
       setLoreEntries(loadedLore);
@@ -140,16 +154,16 @@ function App() {
       setSelectedChapter(null);
       setSelectedLore(null);
     } catch (error) {
-      console.error('Failed to load project data:', error);
+      console.error("Failed to load project data:", error);
     }
   };
 
   // Create a new project
   const handleCreateProject = async (name: string, description: string) => {
     try {
-      console.log('Creating project:', name, description);
+      console.log("Creating project:", name, description);
       const id = await createProject(name, description);
-      console.log('Project created with ID:', id);
+      console.log("Project created with ID:", id);
 
       const newProject: Project = {
         id,
@@ -159,12 +173,12 @@ function App() {
         updated_at: new Date().toISOString(),
       };
 
-      console.log('Setting new project:', newProject);
-      setProjects(prev => [newProject, ...prev]);
+      console.log("Setting new project:", newProject);
+      setProjects((prev) => [newProject, ...prev]);
       setCurrentProject(newProject);
       setShowProjectSelector(false);
     } catch (error) {
-      console.error('Failed to create project:', error);
+      console.error("Failed to create project:", error);
     }
   };
 
@@ -173,13 +187,13 @@ function App() {
     try {
       await updateProject(project);
 
-      setProjects(projects.map(p => p.id === project.id ? project : p));
+      setProjects(projects.map((p) => (p.id === project.id ? project : p)));
 
       if (currentProject?.id === project.id) {
         setCurrentProject(project);
       }
     } catch (error) {
-      console.error('Failed to update project:', error);
+      console.error("Failed to update project:", error);
     }
   };
 
@@ -188,7 +202,7 @@ function App() {
     try {
       await deleteProject(projectId);
 
-      const updatedProjects = projects.filter(p => p.id !== projectId);
+      const updatedProjects = projects.filter((p) => p.id !== projectId);
       setProjects(updatedProjects);
 
       if (currentProject?.id === projectId) {
@@ -200,7 +214,7 @@ function App() {
         }
       }
     } catch (error) {
-      console.error('Failed to delete project:', error);
+      console.error("Failed to delete project:", error);
     }
   };
 
@@ -212,7 +226,7 @@ function App() {
       const newChapter: Chapter = {
         project_id: currentProject.id,
         title: `Chapter ${chapters.length + 1}`,
-        content: '',
+        content: "",
         sort_order: chapters.length,
       };
 
@@ -223,7 +237,7 @@ function App() {
       setSelectedChapter(savedChapter);
       setSelectedLore(null);
     } catch (error) {
-      console.error('Failed to add chapter:', error);
+      console.error("Failed to add chapter:", error);
     }
   };
 
@@ -234,7 +248,7 @@ function App() {
 
     try {
       await deleteChapter(chapter.id, currentProject.id);
-      const updatedChapters = chapters.filter(c => c.id !== chapter.id);
+      const updatedChapters = chapters.filter((c) => c.id !== chapter.id);
       setChapters(updatedChapters);
 
       // Select another chapter if the deleted one was selected
@@ -242,7 +256,7 @@ function App() {
         setSelectedChapter(updatedChapters[0] || null);
       }
     } catch (error) {
-      console.error('Failed to delete chapter:', error);
+      console.error("Failed to delete chapter:", error);
     }
   };
 
@@ -257,11 +271,11 @@ function App() {
       await saveChapter(updatedChapter);
 
       // Update in chapters list
-      setChapters(chapters.map(c =>
-        c.id === updatedChapter.id ? updatedChapter : c
-      ));
+      setChapters(
+        chapters.map((c) => (c.id === updatedChapter.id ? updatedChapter : c)),
+      );
     } catch (error) {
-      console.error('Failed to save chapter:', error);
+      console.error("Failed to save chapter:", error);
     }
   };
 
@@ -274,15 +288,15 @@ function App() {
     try {
       await saveChapter(updatedChapter);
 
-      setChapters(chapters.map(c =>
-        c.id === chapter.id ? updatedChapter : c
-      ));
+      setChapters(
+        chapters.map((c) => (c.id === chapter.id ? updatedChapter : c)),
+      );
 
       if (selectedChapter?.id === chapter.id) {
         setSelectedChapter(updatedChapter);
       }
     } catch (error) {
-      console.error('Failed to update chapter title:', error);
+      console.error("Failed to update chapter title:", error);
     }
   };
 
@@ -295,7 +309,7 @@ function App() {
         project_id: currentProject.id,
         title,
         type,
-        content: '',
+        content: "",
       };
 
       const id = await saveLore(newLore);
@@ -303,7 +317,7 @@ function App() {
 
       setLoreEntries([...loreEntries, savedLore]);
     } catch (error) {
-      console.error('Failed to add lore:', error);
+      console.error("Failed to add lore:", error);
     }
   };
 
@@ -317,24 +331,33 @@ function App() {
     try {
       await saveLore(updatedLore);
 
-      setLoreEntries(loreEntries.map(l =>
-        l.id === updatedLore.id ? updatedLore : l
-      ));
+      setLoreEntries(
+        loreEntries.map((l) => (l.id === updatedLore.id ? updatedLore : l)),
+      );
     } catch (error) {
-      console.error('Failed to save lore:', error);
+      console.error("Failed to save lore:", error);
     }
   };
 
   // Add a new relationship
-  const handleAddRelationship = async (sourceId: number, targetId: number, label: string) => {
+  const handleAddRelationship = async (
+    sourceId: number,
+    targetId: number,
+    label: string,
+  ) => {
     if (!currentProject?.id) return;
 
     try {
-      const id = await addRelationship(currentProject.id, sourceId, targetId, label);
+      const id = await addRelationship(
+        currentProject.id,
+        sourceId,
+        targetId,
+        label,
+      );
 
       // Find the source and target lore to get their details
-      const sourceLore = loreEntries.find(l => l.id === sourceId);
-      const targetLore = loreEntries.find(l => l.id === targetId);
+      const sourceLore = loreEntries.find((l) => l.id === sourceId);
+      const targetLore = loreEntries.find((l) => l.id === targetId);
 
       const newRelationship: RelationshipWithDetails = {
         id,
@@ -350,7 +373,7 @@ function App() {
 
       setRelationships([...relationships, newRelationship]);
     } catch (error) {
-      console.error('Failed to add relationship:', error);
+      console.error("Failed to add relationship:", error);
     }
   };
 
@@ -360,9 +383,9 @@ function App() {
 
     try {
       await deleteRelationship(relationshipId, currentProject.id);
-      setRelationships(relationships.filter(r => r.id !== relationshipId));
+      setRelationships(relationships.filter((r) => r.id !== relationshipId));
     } catch (error) {
-      console.error('Failed to delete relationship:', error);
+      console.error("Failed to delete relationship:", error);
     }
   };
 
@@ -372,18 +395,20 @@ function App() {
 
     try {
       await updateLoreImage(loreId, currentProject.id, imageData);
-      
+
       // Update local state
-      setLoreEntries(loreEntries.map(l =>
-        l.id === loreId ? { ...l, image_data: imageData } : l
-      ));
-      
+      setLoreEntries(
+        loreEntries.map((l) =>
+          l.id === loreId ? { ...l, image_data: imageData } : l,
+        ),
+      );
+
       // Update selected lore if it's the one being updated
       if (selectedLore?.id === loreId) {
         setSelectedLore({ ...selectedLore, image_data: imageData });
       }
     } catch (error) {
-      console.error('Failed to update lore image:', error);
+      console.error("Failed to update lore image:", error);
     }
   };
 
@@ -434,9 +459,13 @@ function App() {
             >
               <FolderOpen className="w-5 h-5 text-zinc-400" />
               <div className="flex-1 min-w-0">
-                <div className="text-sm font-semibold text-zinc-100 truncate">{currentProject.name}</div>
+                <div className="text-sm font-semibold text-zinc-100 truncate">
+                  {currentProject.name}
+                </div>
                 {currentProject.description && (
-                  <div className="text-xs text-zinc-500 truncate">{currentProject.description}</div>
+                  <div className="text-xs text-zinc-500 truncate">
+                    {currentProject.description}
+                  </div>
                 )}
               </div>
               <div className="text-xs text-zinc-500">▼</div>
@@ -470,20 +499,23 @@ function App() {
                   {chapters.map((chapter) => (
                     <div
                       key={chapter.id}
-                      className={`group relative rounded-lg transition-colors ${selectedChapter?.id === chapter.id
-                        ? 'bg-zinc-700'
-                        : 'hover:bg-zinc-800'
-                        }`}
+                      className={`group relative rounded-lg transition-colors ${
+                        selectedChapter?.id === chapter.id
+                          ? "bg-zinc-700"
+                          : "hover:bg-zinc-800"
+                      }`}
                     >
                       <div className="flex items-center">
                         {editingChapterId === chapter.id ? (
                           <input
                             type="text"
                             value={chapter.title}
-                            onChange={(e) => handleTitleChange(chapter, e.target.value)}
+                            onChange={(e) =>
+                              handleTitleChange(chapter, e.target.value)
+                            }
                             onBlur={() => setEditingChapterId(null)}
                             onKeyDown={(e) => {
-                              if (e.key === 'Enter') setEditingChapterId(null);
+                              if (e.key === "Enter") setEditingChapterId(null);
                             }}
                             className="flex-1 px-3 py-2.5 bg-transparent text-sm text-zinc-100 focus:outline-none"
                             autoFocus
@@ -494,7 +526,9 @@ function App() {
                               setSelectedChapter(chapter);
                               setSelectedLore(null);
                             }}
-                            onDoubleClick={() => setEditingChapterId(chapter.id!)}
+                            onDoubleClick={() =>
+                              setEditingChapterId(chapter.id!)
+                            }
                             className="flex-1 text-left px-3 py-2.5 text-sm text-zinc-100"
                           >
                             {chapter.title}
@@ -523,7 +557,9 @@ function App() {
                   <input
                     type="text"
                     value={selectedChapter.title}
-                    onChange={(e) => handleTitleChange(selectedChapter, e.target.value)}
+                    onChange={(e) =>
+                      handleTitleChange(selectedChapter, e.target.value)
+                    }
                     className="text-2xl font-bold bg-transparent text-zinc-100 focus:outline-none w-full"
                     placeholder="Chapter Title"
                   />
@@ -556,7 +592,9 @@ function App() {
               <div className="flex-1 flex items-center justify-center text-zinc-500">
                 <div className="text-center">
                   <Book className="w-16 h-16 mx-auto mb-4 opacity-50" />
-                  <p className="text-lg">Select a chapter or lore entry to start writing</p>
+                  <p className="text-lg">
+                    Select a chapter or lore entry to start writing
+                  </p>
                 </div>
               </div>
             )}
@@ -568,41 +606,35 @@ function App() {
             <div className="px-2 py-2 border-b border-zinc-800">
               <div className="flex bg-zinc-800 rounded-lg p-1">
                 <button
-                  onClick={() => setRightSidebarTab('wiki')}
-                  className={`flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-md text-xs font-medium transition-colors ${rightSidebarTab === 'wiki'
-                    ? 'bg-zinc-700 text-zinc-100'
-                    : 'text-zinc-400 hover:text-zinc-100'
-                    }`}
+                  onClick={() => setRightSidebarTab("wiki")}
+                  className={`flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                    rightSidebarTab === "wiki"
+                      ? "bg-zinc-700 text-zinc-100"
+                      : "text-zinc-400 hover:text-zinc-100"
+                  }`}
                 >
                   <List className="w-3.5 h-3.5" />
                   Wiki
                 </button>
+
                 <button
-                  onClick={() => setRightSidebarTab('graph')}
-                  className={`flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-md text-xs font-medium transition-colors ${rightSidebarTab === 'graph'
-                    ? 'bg-zinc-700 text-zinc-100'
-                    : 'text-zinc-400 hover:text-zinc-100'
-                    }`}
-                >
-                  <GitBranch className="w-3.5 h-3.5" />
-                  Graph
-                </button>
-                <button
-                  onClick={() => setRightSidebarTab('map')}
-                  className={`flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-md text-xs font-medium transition-colors ${rightSidebarTab === 'map'
-                    ? 'bg-emerald-600 text-white'
-                    : 'text-emerald-400 hover:text-emerald-300'
-                    }`}
+                  onClick={() => setRightSidebarTab("map")}
+                  className={`flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                    rightSidebarTab === "map"
+                      ? "bg-emerald-600 text-white"
+                      : "text-emerald-400 hover:text-emerald-300"
+                  }`}
                 >
                   <Map className="w-3.5 h-3.5" />
                   Map
                 </button>
                 <button
-                  onClick={() => setRightSidebarTab('ai')}
-                  className={`flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-md text-xs font-medium transition-colors ${rightSidebarTab === 'ai'
-                    ? 'bg-amber-600 text-white'
-                    : 'text-amber-400 hover:text-amber-300'
-                    }`}
+                  onClick={() => setRightSidebarTab("ai")}
+                  className={`flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                    rightSidebarTab === "ai"
+                      ? "bg-amber-600 text-white"
+                      : "text-amber-400 hover:text-amber-300"
+                  }`}
                 >
                   <Sparkles className="w-3.5 h-3.5" />
                   AI
@@ -612,7 +644,7 @@ function App() {
 
             {/* Tab Content */}
             <div className="flex-1 overflow-hidden">
-              {rightSidebarTab === 'wiki' && (
+              {rightSidebarTab === "wiki" && (
                 <WikiPanel
                   loreEntries={loreEntries}
                   chapters={chapters}
@@ -629,29 +661,20 @@ function App() {
                   apiKey={apiKey}
                 />
               )}
-              {rightSidebarTab === 'graph' && (
-                <GraphView
-                  loreEntries={loreEntries}
-                  chapters={chapters}
-                  relationships={relationships}
-                  onSelectLore={(lore) => {
-                    setSelectedLore(lore);
-                    setSelectedChapter(null);
-                    setRightSidebarTab('wiki');
-                  }}
-                />
-              )}
-              {rightSidebarTab === 'map' && currentProject?.id && (
+
+              {rightSidebarTab === "map" && currentProject?.id && (
                 <MapPanel
                   projectId={currentProject.id}
                   mapImageData={mapImageData}
                   onMapUpload={handleMapUpload}
                 />
               )}
-              {rightSidebarTab === 'ai' && currentProject?.id && (
+              {rightSidebarTab === "ai" && currentProject?.id && (
                 <AIChatPanel
                   projectId={currentProject.id}
-                  currentContent={selectedChapter?.content || selectedLore?.content || ''}
+                  currentContent={
+                    selectedChapter?.content || selectedLore?.content || ""
+                  }
                   loreEntries={loreEntries}
                   relationships={relationships}
                 />

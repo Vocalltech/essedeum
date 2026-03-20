@@ -20,7 +20,7 @@ async function ensureDB(): Promise<Database> {
   if (isInitializing) {
     // Wait up to 5 seconds for initialization
     for (let i = 0; i < 50; i++) {
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await new Promise((resolve) => setTimeout(resolve, 100));
       if (db) return db;
       if (!isInitializing) break;
     }
@@ -71,7 +71,12 @@ export interface RelationshipWithDetails extends Relationship {
 }
 
 // Memory types for the AI system
-export type MemoryType = 'plot_point' | 'world_rule' | 'character_decision' | 'style_note' | 'ai_insight';
+export type MemoryType =
+  | "plot_point"
+  | "world_rule"
+  | "character_decision"
+  | "style_note"
+  | "ai_insight";
 
 export interface ChatMemory {
   id?: number;
@@ -183,7 +188,7 @@ export async function getProjects(): Promise<Project[]> {
 
   try {
     const result = await database.select<Project[]>(
-      "SELECT * FROM projects ORDER BY updated_at DESC"
+      "SELECT * FROM projects ORDER BY updated_at DESC",
     );
     return result;
   } catch (error) {
@@ -195,13 +200,16 @@ export async function getProjects(): Promise<Project[]> {
 /**
  * Create a new project
  */
-export async function createProject(name: string, description: string = ''): Promise<number> {
+export async function createProject(
+  name: string,
+  description: string = "",
+): Promise<number> {
   if (!db) throw new Error("Database not initialized");
 
   try {
     const result = await db.execute(
       "INSERT INTO projects (name, description) VALUES (?, ?)",
-      [name, description]
+      [name, description],
     );
     if (result.lastInsertId === undefined) {
       throw new Error("Failed to get insert ID for project");
@@ -223,7 +231,7 @@ export async function updateProject(project: Project): Promise<void> {
   try {
     await db.execute(
       "UPDATE projects SET name = ?, description = ?, updated_at = datetime('now') WHERE id = ?",
-      [project.name, project.description, project.id]
+      [project.name, project.description, project.id],
     );
   } catch (error) {
     console.error("Failed to update project:", error);
@@ -256,7 +264,7 @@ export async function getChapters(projectId: number): Promise<Chapter[]> {
   try {
     const result = await db.select<Chapter[]>(
       "SELECT * FROM chapters WHERE project_id = ? ORDER BY sort_order ASC",
-      [projectId]
+      [projectId],
     );
     return result;
   } catch (error) {
@@ -276,13 +284,13 @@ export async function saveChapter(chapter: Chapter): Promise<number> {
       // Update existing chapter
       await db.execute(
         "UPDATE chapters SET title = ?, content = ?, sort_order = ? WHERE id = ?",
-        [chapter.title, chapter.content, chapter.sort_order, chapter.id]
+        [chapter.title, chapter.content, chapter.sort_order, chapter.id],
       );
 
       // Update project's updated_at
       await db.execute(
         "UPDATE projects SET updated_at = datetime('now') WHERE id = ?",
-        [chapter.project_id]
+        [chapter.project_id],
       );
 
       return chapter.id;
@@ -290,13 +298,18 @@ export async function saveChapter(chapter: Chapter): Promise<number> {
       // Insert new chapter
       const result = await db.execute(
         "INSERT INTO chapters (project_id, title, content, sort_order) VALUES (?, ?, ?, ?)",
-        [chapter.project_id, chapter.title, chapter.content, chapter.sort_order]
+        [
+          chapter.project_id,
+          chapter.title,
+          chapter.content,
+          chapter.sort_order,
+        ],
       );
 
       // Update project's updated_at
       await db.execute(
         "UPDATE projects SET updated_at = datetime('now') WHERE id = ?",
-        [chapter.project_id]
+        [chapter.project_id],
       );
 
       if (result.lastInsertId === undefined) {
@@ -313,7 +326,10 @@ export async function saveChapter(chapter: Chapter): Promise<number> {
 /**
  * Delete a chapter by ID
  */
-export async function deleteChapter(id: number, projectId: number): Promise<void> {
+export async function deleteChapter(
+  id: number,
+  projectId: number,
+): Promise<void> {
   if (!db) throw new Error("Database not initialized");
 
   try {
@@ -322,7 +338,7 @@ export async function deleteChapter(id: number, projectId: number): Promise<void
     // Update project's updated_at
     await db.execute(
       "UPDATE projects SET updated_at = datetime('now') WHERE id = ?",
-      [projectId]
+      [projectId],
     );
   } catch (error) {
     console.error("Failed to delete chapter:", error);
@@ -341,7 +357,7 @@ export async function getLore(projectId: number): Promise<Lore[]> {
   try {
     const result = await db.select<Lore[]>(
       "SELECT * FROM lore WHERE project_id = ? ORDER BY type, title ASC",
-      [projectId]
+      [projectId],
     );
     return result;
   } catch (error) {
@@ -361,13 +377,13 @@ export async function saveLore(lore: Lore): Promise<number> {
       // Update existing lore
       await db.execute(
         "UPDATE lore SET title = ?, type = ?, content = ?, image_data = ? WHERE id = ?",
-        [lore.title, lore.type, lore.content, lore.image_data || null, lore.id]
+        [lore.title, lore.type, lore.content, lore.image_data || null, lore.id],
       );
 
       // Update project's updated_at
       await db.execute(
         "UPDATE projects SET updated_at = datetime('now') WHERE id = ?",
-        [lore.project_id]
+        [lore.project_id],
       );
 
       return lore.id;
@@ -375,13 +391,19 @@ export async function saveLore(lore: Lore): Promise<number> {
       // Insert new lore
       const result = await db.execute(
         "INSERT INTO lore (project_id, title, type, content, image_data) VALUES (?, ?, ?, ?, ?)",
-        [lore.project_id, lore.title, lore.type, lore.content, lore.image_data || null]
+        [
+          lore.project_id,
+          lore.title,
+          lore.type,
+          lore.content,
+          lore.image_data || null,
+        ],
       );
 
       // Update project's updated_at
       await db.execute(
         "UPDATE projects SET updated_at = datetime('now') WHERE id = ?",
-        [lore.project_id]
+        [lore.project_id],
       );
 
       if (result.lastInsertId === undefined) {
@@ -398,19 +420,23 @@ export async function saveLore(lore: Lore): Promise<number> {
 /**
  * Update lore image data
  */
-export async function updateLoreImage(loreId: number, projectId: number, imageData: string | null): Promise<void> {
+export async function updateLoreImage(
+  loreId: number,
+  projectId: number,
+  imageData: string | null,
+): Promise<void> {
   const database = await ensureDB();
 
   try {
-    await database.execute(
-      "UPDATE lore SET image_data = ? WHERE id = ?",
-      [imageData, loreId]
-    );
+    await database.execute("UPDATE lore SET image_data = ? WHERE id = ?", [
+      imageData,
+      loreId,
+    ]);
 
     // Update project's updated_at
     await database.execute(
       "UPDATE projects SET updated_at = datetime('now') WHERE id = ?",
-      [projectId]
+      [projectId],
     );
   } catch (error) {
     console.error("Failed to update lore image:", error);
@@ -430,7 +456,7 @@ export async function deleteLore(id: number, projectId: number): Promise<void> {
     // Update project's updated_at
     await db.execute(
       "UPDATE projects SET updated_at = datetime('now') WHERE id = ?",
-      [projectId]
+      [projectId],
     );
   } catch (error) {
     console.error("Failed to delete lore:", error);
@@ -443,12 +469,14 @@ export async function deleteLore(id: number, projectId: number): Promise<void> {
 /**
  * Get all relationships for a project with lore details
  */
-export async function getRelationships(projectId: number): Promise<RelationshipWithDetails[]> {
+export async function getRelationships(
+  projectId: number,
+): Promise<RelationshipWithDetails[]> {
   if (!db) throw new Error("Database not initialized");
 
   try {
     const result = await db.select<RelationshipWithDetails[]>(
-      `SELECT 
+      `SELECT
         r.id, r.project_id, r.source_id, r.target_id, r.label,
         s.title as source_title, s.type as source_type,
         t.title as target_title, t.type as target_type
@@ -457,7 +485,7 @@ export async function getRelationships(projectId: number): Promise<RelationshipW
       LEFT JOIN lore t ON r.target_id = t.id
       WHERE r.project_id = ?
       ORDER BY r.id ASC`,
-      [projectId]
+      [projectId],
     );
     return result;
   } catch (error) {
@@ -469,12 +497,14 @@ export async function getRelationships(projectId: number): Promise<RelationshipW
 /**
  * Get relationships for a specific lore entry (where it's source or target)
  */
-export async function getRelationshipsForLore(loreId: number): Promise<RelationshipWithDetails[]> {
+export async function getRelationshipsForLore(
+  loreId: number,
+): Promise<RelationshipWithDetails[]> {
   if (!db) throw new Error("Database not initialized");
 
   try {
     const result = await db.select<RelationshipWithDetails[]>(
-      `SELECT 
+      `SELECT
         r.id, r.project_id, r.source_id, r.target_id, r.label,
         s.title as source_title, s.type as source_type,
         t.title as target_title, t.type as target_type
@@ -483,7 +513,7 @@ export async function getRelationshipsForLore(loreId: number): Promise<Relations
       LEFT JOIN lore t ON r.target_id = t.id
       WHERE r.source_id = ? OR r.target_id = ?
       ORDER BY r.id ASC`,
-      [loreId, loreId]
+      [loreId, loreId],
     );
     return result;
   } catch (error) {
@@ -499,20 +529,20 @@ export async function addRelationship(
   projectId: number,
   sourceId: number,
   targetId: number,
-  label: string
+  label: string,
 ): Promise<number> {
   if (!db) throw new Error("Database not initialized");
 
   try {
     const result = await db.execute(
       "INSERT INTO relationships (project_id, source_id, target_id, label) VALUES (?, ?, ?, ?)",
-      [projectId, sourceId, targetId, label]
+      [projectId, sourceId, targetId, label],
     );
 
     // Update project's updated_at
     await db.execute(
       "UPDATE projects SET updated_at = datetime('now') WHERE id = ?",
-      [projectId]
+      [projectId],
     );
 
     if (result.lastInsertId === undefined) {
@@ -528,7 +558,10 @@ export async function addRelationship(
 /**
  * Delete a relationship by ID
  */
-export async function deleteRelationship(id: number, projectId: number): Promise<void> {
+export async function deleteRelationship(
+  id: number,
+  projectId: number,
+): Promise<void> {
   if (!db) throw new Error("Database not initialized");
 
   try {
@@ -537,7 +570,7 @@ export async function deleteRelationship(id: number, projectId: number): Promise
     // Update project's updated_at
     await db.execute(
       "UPDATE projects SET updated_at = datetime('now') WHERE id = ?",
-      [projectId]
+      [projectId],
     );
   } catch (error) {
     console.error("Failed to delete relationship:", error);
@@ -553,14 +586,14 @@ export async function deleteRelationship(id: number, projectId: number): Promise
 export async function saveMemory(
   projectId: number,
   content: string,
-  type: MemoryType
+  type: MemoryType,
 ): Promise<number> {
   const database = await ensureDB();
 
   try {
     const result = await database.execute(
       "INSERT INTO chat_memories (project_id, content, type) VALUES (?, ?, ?)",
-      [projectId, content, type]
+      [projectId, content, type],
     );
 
     if (result.lastInsertId === undefined) {
@@ -578,14 +611,14 @@ export async function saveMemory(
  */
 export async function getRecentMemories(
   projectId: number,
-  limit: number = 10
+  limit: number = 10,
 ): Promise<ChatMemory[]> {
   const database = await ensureDB();
 
   try {
     const result = await database.select<ChatMemory[]>(
       "SELECT * FROM chat_memories WHERE project_id = ? ORDER BY created_at DESC LIMIT ?",
-      [projectId, limit]
+      [projectId, limit],
     );
     return result;
   } catch (error) {
@@ -603,7 +636,7 @@ export async function getAllMemories(projectId: number): Promise<ChatMemory[]> {
   try {
     const result = await database.select<ChatMemory[]>(
       "SELECT * FROM chat_memories WHERE project_id = ? ORDER BY created_at DESC",
-      [projectId]
+      [projectId],
     );
     return result;
   } catch (error) {
@@ -626,13 +659,27 @@ export async function deleteMemory(id: number): Promise<void> {
   }
 }
 
+export async function updateMemory(id: number, content: string): Promise<void> {
+  const database = await ensureDB();
+
+  try {
+    await database.execute(
+      "UPDATE chat_memories SET content = ? WHERE id = ?",
+      [content, id],
+    );
+  } catch (error) {
+    console.error("Failed to update memory:", error);
+    throw error;
+  }
+}
+
 /**
  * Get random chapter excerpts for style analysis
  */
 export async function getRandomChapterExcerpts(
   projectId: number,
   excerptCount: number = 3,
-  excerptLength: number = 500
+  excerptLength: number = 500,
 ): Promise<string[]> {
   const database = await ensureDB();
 
@@ -640,7 +687,7 @@ export async function getRandomChapterExcerpts(
     // Get all chapters with content
     const chapters = await database.select<Chapter[]>(
       "SELECT * FROM chapters WHERE project_id = ? AND content != '' AND content IS NOT NULL",
-      [projectId]
+      [projectId],
     );
 
     if (chapters.length === 0) {
@@ -651,9 +698,15 @@ export async function getRandomChapterExcerpts(
     const usedChapterIds = new Set<number>();
 
     // Try to get excerpts from different chapters
-    for (let i = 0; i < excerptCount && usedChapterIds.size < chapters.length; i++) {
+    for (
+      let i = 0;
+      i < excerptCount && usedChapterIds.size < chapters.length;
+      i++
+    ) {
       // Pick a random chapter we haven't used yet
-      const availableChapters = chapters.filter(c => c.id && !usedChapterIds.has(c.id));
+      const availableChapters = chapters.filter(
+        (c) => c.id && !usedChapterIds.has(c.id),
+      );
       if (availableChapters.length === 0) break;
 
       const randomIndex = Math.floor(Math.random() * availableChapters.length);
@@ -665,9 +718,9 @@ export async function getRandomChapterExcerpts(
 
       // Extract plain text from HTML content
       const plainText = chapter.content
-        .replace(/<[^>]*>/g, ' ')
-        .replace(/&nbsp;/g, ' ')
-        .replace(/\s+/g, ' ')
+        .replace(/<[^>]*>/g, " ")
+        .replace(/&nbsp;/g, " ")
+        .replace(/\s+/g, " ")
         .trim();
 
       if (plainText.length < 50) continue; // Skip very short content
@@ -680,13 +733,13 @@ export async function getRandomChapterExcerpts(
       let excerpt = plainText.substring(startPos, startPos + excerptLength);
 
       // Try to start at a word boundary
-      const firstSpace = excerpt.indexOf(' ');
+      const firstSpace = excerpt.indexOf(" ");
       if (firstSpace > 0 && firstSpace < 50) {
         excerpt = excerpt.substring(firstSpace + 1);
       }
 
       // Try to end at a word boundary
-      const lastSpace = excerpt.lastIndexOf(' ');
+      const lastSpace = excerpt.lastIndexOf(" ");
       if (lastSpace > excerpt.length - 50) {
         excerpt = excerpt.substring(0, lastSpace);
       }
