@@ -382,6 +382,11 @@ export function AIChatPanel({
         text: "text-purple-400",
         border: "border-purple-500/30",
       },
+      orange: {
+        bg: "bg-orange-500/20",
+        text: "text-orange-400",
+        border: "border-orange-500/30",
+      },
     };
     return colors[PERSONAS[persona].color]?.[type] || colors.amber[type];
   };

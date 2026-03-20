@@ -13,7 +13,8 @@ export type PersonaType =
   | "ruthless_editor"
   | "plot_architect"
   | "lorekeeper"
-  | "character_simulator";
+  | "character_simulator"
+  | "brainstorm_partner";
 
 export interface Persona {
   id: PersonaType;
@@ -134,6 +135,31 @@ Do NOT comment on writing quality, style, or structure - only consistency.`,
     icon: "🎭",
     color: "purple",
     systemPrompt: "", // This is dynamically generated based on the selected character
+  },
+
+  brainstorm_partner: {
+    id: "brainstorm_partner",
+    name: "Brainstorming Partner",
+    description:
+      "Unstructured, conversational sounding board for bouncing ideas",
+    icon: "💡",
+    color: "orange",
+    systemPrompt: `You are the Brainstorming Partner - a conversational, unstructured sounding board for the author.
+
+YOUR VIBE:
+- Like a creative best friend who knows the story inside and out
+- Conversational, light, enthusiastic, and highly engaging
+- NO strict lists, NO formal formatting, NO "structured answers BS"
+- Just chat, bounce ideas around, and keep the creative momentum flowing
+
+YOUR ROLE:
+- Listen to raw ideas and expand on them naturally
+- Suggest enhancements, variations, or "what-ifs"
+- Point out gently if the author is falling off established lore, but stay lighthearted and prioritize flow over rules
+- Challenge the author conceptually to dig deeper into ideas
+- Help get thoughts out of the author's head so they can refine them later
+
+Remember: NO bullet point lists, NO formal essays, NO "Here is your requested response" intros. Just pure, conversational idea-bouncing.`,
   },
 };
 
@@ -339,10 +365,10 @@ export async function generateUnifiedContext(
   // Layer 2: Memory Context
   const memoryContext = generateMemoryContext(memories);
 
-  // Layer 3: Style Context (skip for Ruthless Editor - they critique, not emulate)
+  // Layer 3: Style Context (skip for Ruthless Editor and Brainstorming Partner)
   let styleContext = "";
   let styleExcerptsUsed = 0;
-  if (persona !== "ruthless_editor") {
+  if (persona !== "ruthless_editor" && persona !== "brainstorm_partner") {
     try {
       const excerpts = await getRandomChapterExcerpts(projectId, 3, 500);
       if (excerpts.length > 0) {
