@@ -208,7 +208,7 @@ export function AIChatPanel({
     setShowMemoryTypeDropdown(null);
 
     try {
-      await saveMemory(projectId, content, type);
+      await saveMemory({ project_id: projectId, content, type });
 
       // Mark message as saved
       setMessages((prev) =>
@@ -234,7 +234,12 @@ export function AIChatPanel({
   const handleSaveMemoryEdit = async () => {
     if (!editingMemoryId) return;
     try {
-      await updateMemory(editingMemoryId, editingMemoryContent);
+      const mem = memories.find((m) => m.id === editingMemoryId);
+      await updateMemory(
+        editingMemoryId,
+        editingMemoryContent,
+        mem?.type || "ai_insight",
+      );
       await loadMemories();
       setEditingMemoryId(null);
     } catch (error) {

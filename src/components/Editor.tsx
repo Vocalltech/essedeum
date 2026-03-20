@@ -2,8 +2,10 @@ import { useEditor, EditorContent, ReactRenderer } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
 import Mention from "@tiptap/extension-mention";
-import { useEffect, useRef, useCallback } from "react";
-import { Save } from "lucide-react";
+import { useEffect, useRef, useCallback, useState } from "react";
+import { Save, AlignCenterVertical, Ghost } from "lucide-react";
+import { Typewriter } from "./extensions/Typewriter";
+import { GhostNote } from "./extensions/GhostNote"; // updated to .tsx
 import tippy, { Instance as TippyInstance } from "tippy.js";
 import "tippy.js/dist/tippy.css";
 import { MentionList, MentionListRef, MentionItem } from "./MentionList";
@@ -22,6 +24,9 @@ export function Editor({
   placeholder = "Start writing your story...",
   loreEntries = [],
 }: EditorProps) {
+  const [typewriterMode, setTypewriterMode] = useState(false);
+  const [showNoteModal, setShowNoteModal] = useState(false);
+  const [noteText, setNoteText] = useState("");
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const loreEntriesRef = useRef<Lore[]>(loreEntries);
 
@@ -57,6 +62,10 @@ export function Editor({
       Placeholder.configure({
         placeholder,
       }),
+      Typewriter.configure({
+        enabled: typewriterMode,
+      }),
+      GhostNote,
       Mention.configure({
         HTMLAttributes: {
           class: "mention",
@@ -161,6 +170,18 @@ export function Editor({
     }
   }, [content, editor]);
 
+  // Update typewriter mode option
+  useEffect(() => {
+    if (editor) {
+      const extension = editor.extensionManager.extensions.find(
+        (e) => e.name === "typewriter",
+      );
+      if (extension) {
+        extension.options.enabled = typewriterMode;
+      }
+    }
+  }, [typewriterMode, editor]);
+
   // Cleanup timeout on unmount
   useEffect(() => {
     return () => {
@@ -233,8 +254,81 @@ export function Editor({
           padding: 0;
         }
       `}</style>
+      {showNoteModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-4 w-full max-w-sm shadow-xl">
+            <h3 className="text-sm font-medium text-zinc-200 mb-3 flex items-center justify-between">
+              <span className="flex items-center gap-2">
+                <Ghost className="w-4 h-4 text-amber-500" />
+                Edit Ghost Note
+              </span>
+              <button
+                onClick={() => {
+                  editor
+                    .chain()
+                    .focus()
+                    .extendMarkRange("ghostNote")
+                    .unsetGhostNote()
+                    .run();
+                  setShowNoteModal(false);
+                }}
+                className="text-zinc-500 hover:text-red-400 transition-colors px-2 py-1 rounded hover:bg-zinc-800 text-xs"
+              >
+                Delete Note
+              </button>
+            </h3>
+            <textarea
+              value={noteText}
+              onChange={(e) => setNoteText(e.target.value)}
+              className="w-full h-24 bg-zinc-950 border border-zinc-800 rounded p-2 text-sm text-zinc-300 focus:outline-none focus:border-amber-500/50 resize-none mb-3"
+              placeholder="Write a note about this text..."
+              autoFocus
+            />
+            <div className="flex items-center justify-end gap-2">
+              <button
+                onClick={() => {
+                  setShowNoteModal(false);
+                  setNoteText("");
+                  editor.commands.focus();
+                }}
+                className="px-3 py-1.5 rounded text-sm text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  editor
+                    .chain()
+                    .focus()
+                    .extendMarkRange("ghostNote")
+                    .setGhostNote({ comment: noteText })
+                    .run();
+                  setShowNoteModal(false);
+                  setNoteText("");
+                }}
+                className="px-3 py-1.5 rounded text-sm bg-amber-600/20 text-amber-500 hover:bg-amber-600/30 font-medium transition-colors"
+              >
+                Save Note
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="flex items-center justify-between px-8 py-3 border-b border-zinc-800 sticky top-0 bg-zinc-950/95 backdrop-blur-sm z-10">
         <div className="flex items-center gap-3">
+          <button
+            onClick={() => setTypewriterMode(!typewriterMode)}
+            className={`p-1.5 rounded transition-colors ${
+              typewriterMode
+                ? "bg-zinc-700 text-zinc-100"
+                : "bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-100"
+            }`}
+            title="Toggle Typewriter Mode"
+          >
+            <AlignCenterVertical className="w-4 h-4" />
+          </button>
+          <div className="w-px h-6 bg-zinc-700" />
           <button
             onClick={() => editor.chain().focus().toggleBold().run()}
             className={`px-3 py-1 rounded text-sm transition-colors ${
@@ -293,6 +387,27 @@ export function Editor({
             H3
           </button>
           <div className="w-px h-6 bg-zinc-700" />
+          <button
+            onClick={() => {
+              if (editor.isActive("ghostNote")) {
+                setNoteText(editor.getAttributes("ghostNote").comment || "");
+                setShowNoteModal(true);
+              } else if (!editor.state.selection.empty) {
+                setNoteText("");
+                setShowNoteModal(true);
+              }
+            }}
+            className={`px-3 py-1 rounded text-sm transition-colors flex items-center gap-1.5 ${
+              editor.isActive("ghostNote")
+                ? "bg-amber-500/20 text-amber-400"
+                : "bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-amber-400"
+            }`}
+            title="Add Ghost Note (Mod+Shift+G)"
+          >
+            <Ghost className="w-3.5 h-3.5" />
+            Note
+          </button>
+          <div className="w-px h-6 bg-zinc-700" />
           <span className="text-xs text-zinc-500">
             Type{" "}
             <kbd className="px-1.5 py-0.5 bg-zinc-800 rounded text-zinc-400">
@@ -306,6 +421,7 @@ export function Editor({
           <span>Auto-saving</span>
         </div>
       </div>
+
       <EditorContent editor={editor} />
     </div>
   );

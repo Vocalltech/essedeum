@@ -225,7 +225,9 @@ export function ProjectSelector({
                         )}
                         <div className="text-xs text-zinc-500">
                           Updated{" "}
-                          {new Date(project.updated_at).toLocaleDateString()}
+                          {project.updated_at
+                            ? new Date(project.updated_at).toLocaleDateString()
+                            : ""}
                         </div>
                       </div>
                       <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
