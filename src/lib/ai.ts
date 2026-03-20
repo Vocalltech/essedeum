@@ -1,14 +1,19 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
-import { Lore, RelationshipWithDetails, ChatMemory, getRandomChapterExcerpts } from './db';
+import { GoogleGenerativeAI } from "@google/generative-ai";
+import {
+  Lore,
+  RelationshipWithDetails,
+  ChatMemory,
+  getRandomChapterExcerpts,
+} from "./db";
 
 // ==================== PERSONA SYSTEM ====================
 
 export type PersonaType =
-  | 'co_author'
-  | 'ruthless_editor'
-  | 'plot_architect'
-  | 'lorekeeper'
-  | 'character_simulator';
+  | "co_author"
+  | "ruthless_editor"
+  | "plot_architect"
+  | "lorekeeper"
+  | "character_simulator";
 
 export interface Persona {
   id: PersonaType;
@@ -21,11 +26,11 @@ export interface Persona {
 
 export const PERSONAS: Record<PersonaType, Persona> = {
   co_author: {
-    id: 'co_author',
-    name: 'The Co-Author',
-    description: 'Balanced, helpful, and context-aware writing partner',
-    icon: '✍️',
-    color: 'amber',
+    id: "co_author",
+    name: "The Co-Author",
+    description: "Balanced, helpful, and context-aware writing partner",
+    icon: "✍️",
+    color: "amber",
     systemPrompt: `You are an expert co-author and writing partner. You are:
 - Collaborative and supportive while maintaining high standards
 - Deeply aware of the story's context, characters, and world
@@ -37,11 +42,11 @@ Your goal is to help the author tell the best possible story while preserving th
   },
 
   ruthless_editor: {
-    id: 'ruthless_editor',
-    name: 'The Ruthless Editor',
-    description: 'Harsh but constructive NYC publisher critique',
-    icon: '🔪',
-    color: 'red',
+    id: "ruthless_editor",
+    name: "The Ruthless Editor",
+    description: "Harsh but constructive NYC publisher critique",
+    icon: "🔪",
+    color: "red",
     systemPrompt: `You are a ruthless senior editor at a major NYC publishing house with 30 years of experience. You've rejected thousands of manuscripts and have zero patience for amateur writing. You are:
 
 - BRUTALLY honest about weak writing - you don't sugarcoat
@@ -62,11 +67,11 @@ Remember: You're harsh because you believe in the author's potential. Mediocrity
   },
 
   plot_architect: {
-    id: 'plot_architect',
-    name: 'The Plot Architect',
-    description: 'Story structure and narrative tension expert',
-    icon: '📐',
-    color: 'blue',
+    id: "plot_architect",
+    name: "The Plot Architect",
+    description: "Story structure and narrative tension expert",
+    icon: "📐",
+    color: "blue",
     systemPrompt: `You are a master story architect specializing in narrative structure. You think in terms of:
 
 STRUCTURE FRAMEWORKS:
@@ -96,11 +101,11 @@ When analyzing, identify:
   },
 
   lorekeeper: {
-    id: 'lorekeeper',
-    name: 'The Lorekeeper',
-    description: 'Consistency guardian and contradiction detector',
-    icon: '📚',
-    color: 'emerald',
+    id: "lorekeeper",
+    name: "The Lorekeeper",
+    description: "Consistency guardian and contradiction detector",
+    icon: "📚",
+    color: "emerald",
     systemPrompt: `You are the Lorekeeper - an obsessive guardian of story consistency. Your ONLY concern is whether the story contradicts established facts.
 
 YOUR SACRED DUTIES:
@@ -123,12 +128,12 @@ Do NOT comment on writing quality, style, or structure - only consistency.`,
   },
 
   character_simulator: {
-    id: 'character_simulator',
-    name: 'Character Simulator',
-    description: 'Roleplay as a specific character from your story',
-    icon: '🎭',
-    color: 'purple',
-    systemPrompt: '', // This is dynamically generated based on the selected character
+    id: "character_simulator",
+    name: "Character Simulator",
+    description: "Roleplay as a specific character from your story",
+    icon: "🎭",
+    color: "purple",
+    systemPrompt: "", // This is dynamically generated based on the selected character
   },
 };
 
@@ -155,9 +160,9 @@ export interface AIContext {
  */
 function stripHtml(html: string): string {
   return html
-    .replace(/<[^>]*>/g, ' ')
-    .replace(/&nbsp;/g, ' ')
-    .replace(/\s+/g, ' ')
+    .replace(/<[^>]*>/g, " ")
+    .replace(/&nbsp;/g, " ")
+    .replace(/\s+/g, " ")
     .trim();
 }
 
@@ -167,8 +172,12 @@ function stripHtml(html: string): string {
 export function generateBaseContext(
   currentText: string,
   loreList: Lore[],
-  relationshipList: RelationshipWithDetails[]
-): { contextString: string; relevantLore: Lore[]; relevantRelationships: RelationshipWithDetails[] } {
+  relationshipList: RelationshipWithDetails[],
+): {
+  contextString: string;
+  relevantLore: Lore[];
+  relevantRelationships: RelationshipWithDetails[];
+} {
   const normalizedText = currentText.toLowerCase();
   const plainText = stripHtml(currentText).toLowerCase();
 
@@ -180,7 +189,7 @@ export function generateBaseContext(
     if (!lore.id) continue;
     const loreName = lore.title.toLowerCase();
     if (normalizedText.includes(loreName) || plainText.includes(loreName)) {
-      relevantLore.push({ ...lore, matchedIn: 'text' });
+      relevantLore.push({ ...lore, matchedIn: "text" });
       relevantLoreIds.add(lore.id);
     }
   }
@@ -188,20 +197,23 @@ export function generateBaseContext(
   // Find related relationships and add connected lore
   const relevantRelationships: RelationshipWithDetails[] = [];
   for (const rel of relationshipList) {
-    if (relevantLoreIds.has(rel.source_id) || relevantLoreIds.has(rel.target_id)) {
+    if (
+      relevantLoreIds.has(rel.source_id) ||
+      relevantLoreIds.has(rel.target_id)
+    ) {
       relevantRelationships.push(rel);
 
       if (!relevantLoreIds.has(rel.source_id)) {
-        const sourceLore = loreList.find(l => l.id === rel.source_id);
+        const sourceLore = loreList.find((l) => l.id === rel.source_id);
         if (sourceLore) {
-          relevantLore.push({ ...sourceLore, matchedIn: 'relationship' });
+          relevantLore.push({ ...sourceLore, matchedIn: "relationship" });
           relevantLoreIds.add(rel.source_id);
         }
       }
       if (!relevantLoreIds.has(rel.target_id)) {
-        const targetLore = loreList.find(l => l.id === rel.target_id);
+        const targetLore = loreList.find((l) => l.id === rel.target_id);
         if (targetLore) {
-          relevantLore.push({ ...targetLore, matchedIn: 'relationship' });
+          relevantLore.push({ ...targetLore, matchedIn: "relationship" });
           relevantLoreIds.add(rel.target_id);
         }
       }
@@ -209,16 +221,19 @@ export function generateBaseContext(
   }
 
   // Build context string
-  let contextString = '';
+  let contextString = "";
 
   if (relevantLore.length > 0) {
     contextString += `STORY WORLD - RELEVANT ENTRIES:\n`;
     for (const lore of relevantLore) {
-      const details = lore.content ? stripHtml(lore.content) : 'No details available';
-      const truncatedDetails = details.length > 300 ? details.substring(0, 300) + '...' : details;
+      const details = lore.content
+        ? stripHtml(lore.content)
+        : "No details available";
+      const truncatedDetails =
+        details.length > 300 ? details.substring(0, 300) + "..." : details;
       contextString += `• ${lore.title} (${lore.type}): ${truncatedDetails}\n`;
     }
-    contextString += '\n';
+    contextString += "\n";
   }
 
   if (relevantRelationships.length > 0) {
@@ -226,7 +241,7 @@ export function generateBaseContext(
     for (const rel of relevantRelationships) {
       contextString += `• ${rel.source_title} → "${rel.label}" → ${rel.target_title}\n`;
     }
-    contextString += '\n';
+    contextString += "\n";
   }
 
   return {
@@ -240,31 +255,32 @@ export function generateBaseContext(
  * Generates the memory context from saved memories
  */
 export function generateMemoryContext(memories: ChatMemory[]): string {
-  if (memories.length === 0) return '';
+  if (memories.length === 0) return "";
 
   let context = `ESTABLISHED PROJECT FACTS & DECISIONS:\n`;
   context += `(These are important points the author has saved for continuity)\n\n`;
 
   for (const memory of memories) {
-    const typeLabel = {
-      plot_point: '📍 Plot',
-      world_rule: '🌍 World Rule',
-      character_decision: '👤 Character',
-      style_note: '✍️ Style',
-      ai_insight: '💡 Insight',
-    }[memory.type] || '📝 Note';
+    const typeLabel =
+      {
+        plot_point: "📍 Plot",
+        world_rule: "🌍 World Rule",
+        character_decision: "👤 Character",
+        style_note: "✍️ Style",
+        ai_insight: "💡 Insight",
+      }[memory.type] || "📝 Note";
 
     context += `${typeLabel}: ${memory.content}\n`;
   }
 
-  return context + '\n';
+  return context + "\n";
 }
 
 /**
  * Generates the style context from author's writing samples
  */
 export function generateStyleContext(excerpts: string[]): string {
-  if (excerpts.length === 0) return '';
+  if (excerpts.length === 0) return "";
 
   let context = `AUTHOR'S WRITING STYLE SAMPLES:\n`;
   context += `(Emulate this writing style - match the voice, rhythm, and tone)\n\n`;
@@ -280,14 +296,14 @@ export function generateStyleContext(excerpts: string[]): string {
  * Generates the character simulator prompt
  */
 export function generateCharacterSimulatorPrompt(character: Lore): string {
-  const details = character.content ? stripHtml(character.content) : '';
+  const details = character.content ? stripHtml(character.content) : "";
 
   return `You ARE ${character.title}. You are in a roleplay scenario.
 
 CHARACTER PROFILE:
 Name: ${character.title}
 Type: ${character.type}
-${details ? `Details: ${details}` : ''}
+${details ? `Details: ${details}` : ""}
 
 CRITICAL RULES:
 1. You ARE this character - speak in first person as them
@@ -311,19 +327,22 @@ export async function generateUnifiedContext(
   relationshipList: RelationshipWithDetails[],
   memories: ChatMemory[],
   persona: PersonaType,
-  targetCharacter?: Lore
+  targetCharacter?: Lore,
 ): Promise<AIContext> {
   // Layer 1: Base Context (Wiki + Relationships)
-  const { contextString: baseContext, relevantLore, relevantRelationships } =
-    generateBaseContext(currentText, loreList, relationshipList);
+  const {
+    contextString: baseContext,
+    relevantLore,
+    relevantRelationships,
+  } = generateBaseContext(currentText, loreList, relationshipList);
 
   // Layer 2: Memory Context
   const memoryContext = generateMemoryContext(memories);
 
   // Layer 3: Style Context (skip for Ruthless Editor - they critique, not emulate)
-  let styleContext = '';
+  let styleContext = "";
   let styleExcerptsUsed = 0;
-  if (persona !== 'ruthless_editor') {
+  if (persona !== "ruthless_editor") {
     try {
       const excerpts = await getRandomChapterExcerpts(projectId, 3, 500);
       if (excerpts.length > 0) {
@@ -331,13 +350,13 @@ export async function generateUnifiedContext(
         styleExcerptsUsed = excerpts.length;
       }
     } catch (error) {
-      console.warn('Failed to get style excerpts:', error);
+      console.warn("Failed to get style excerpts:", error);
     }
   }
 
   // Layer 4: Persona Context
-  let personaContext = '';
-  if (persona === 'character_simulator' && targetCharacter) {
+  let personaContext = "";
+  if (persona === "character_simulator" && targetCharacter) {
     personaContext = generateCharacterSimulatorPrompt(targetCharacter);
   } else {
     personaContext = PERSONAS[persona].systemPrompt;
@@ -384,18 +403,20 @@ export interface StreamOptions {
 /**
  * Streams a response from Gemini AI with full context
  */
-export async function streamGeminiResponse(options: StreamOptions): Promise<void> {
+export async function streamGeminiResponse(
+  options: StreamOptions,
+): Promise<void> {
   const { apiKey, context, userPrompt, currentText, onChunk } = options;
 
   const genAI = new GoogleGenerativeAI(apiKey);
-  const model = genAI.getGenerativeModel({ model: 'gemini-3-pro-preview' });
+  const model = genAI.getGenerativeModel({ model: "gemini-3.1-pro-preview" });
 
   const plainSceneText = stripHtml(currentText);
 
   const fullPrompt = `${context.fullPrompt}
 
 === CURRENT SCENE ===
-${plainSceneText || '(No text in the current scene yet)'}
+${plainSceneText || "(No text in the current scene yet)"}
 
 === USER REQUEST ===
 ${userPrompt}
@@ -412,7 +433,7 @@ Please respond according to your persona and the context provided.`;
       }
     }
   } catch (error) {
-    console.error('Gemini API error:', error);
+    console.error("Gemini API error:", error);
     throw error;
   }
 }
@@ -423,8 +444,12 @@ Please respond according to your persona and the context provided.`;
 export function generateStoryContext(
   currentText: string,
   loreList: Lore[],
-  relationshipList: RelationshipWithDetails[]
-): { contextString: string; relevantLore: Lore[]; relevantRelationships: RelationshipWithDetails[] } {
+  relationshipList: RelationshipWithDetails[],
+): {
+  contextString: string;
+  relevantLore: Lore[];
+  relevantRelationships: RelationshipWithDetails[];
+} {
   return generateBaseContext(currentText, loreList, relationshipList);
 }
 
@@ -437,7 +462,7 @@ export function getContextSummary(
   relevantLore: Lore[],
   relevantRelationships: RelationshipWithDetails[],
   memoriesUsed: number = 0,
-  styleExcerptsUsed: number = 0
+  styleExcerptsUsed: number = 0,
 ): string {
   const parts: string[] = [];
 
@@ -455,10 +480,10 @@ export function getContextSummary(
   }
 
   if (parts.length === 0) {
-    return 'No context';
+    return "No context";
   }
 
-  return parts.join(' • ');
+  return parts.join(" • ");
 }
 
 /**
@@ -476,7 +501,10 @@ export function getDetailedContextSummary(context: AIContext): {
     relationships: context.relevantRelationships.length,
     memories: context.memoriesUsed,
     style: context.styleExcerptsUsed,
-    total: context.relevantLore.length + context.relevantRelationships.length +
-      context.memoriesUsed + context.styleExcerptsUsed,
+    total:
+      context.relevantLore.length +
+      context.relevantRelationships.length +
+      context.memoriesUsed +
+      context.styleExcerptsUsed,
   };
 }
