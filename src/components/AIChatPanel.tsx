@@ -103,7 +103,8 @@ export function AIChatPanel({
   >(new Set());
 
   const [editingMemoryId, setEditingMemoryId] = useState<number | null>(null);
-  const [editingMemoryContent, setEditingMemoryContent] = useState<string>("");
+  const [editingMemoryContent, setEditingMemoryContent] = useState("");
+  const [isExtracting, setIsExtracting] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const personaDropdownRef = useRef<HTMLDivElement>(null);
@@ -351,6 +352,69 @@ export function AIChatPanel({
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       handleSend();
+    }
+  };
+
+  const handleExtractLore = async () => {
+    if (!apiKey || !currentContent.trim() || isExtracting) return;
+
+    setIsExtracting(true);
+    setError(null);
+
+    const userMessage: Message = {
+      id: Date.now().toString(),
+      role: "user",
+      content: "Extract new lore entries from my current text.",
+      timestamp: new Date(),
+    };
+
+    setMessages((prev) => [...prev, userMessage]);
+
+    try {
+      const { GoogleGenerativeAI } = await import("@google/generative-ai");
+      const genAI = new GoogleGenerativeAI(apiKey);
+      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+
+      const prompt = `Analyze the following text and extract any potential NEW worldbuilding elements (characters, locations, items, factions, or concepts) that seem important but aren't already established.
+
+Format your response as a simple markdown list. For each item, provide a proposed Title, its Type (Character, Location, Item, Faction, or Concept), and a 1-sentence description.
+
+Current Text:
+${currentContent}`;
+
+      const assistantMessageId = (Date.now() + 1).toString();
+      const assistantMessage: Message = {
+        id: assistantMessageId,
+        role: "assistant",
+        content: "",
+        timestamp: new Date(),
+      };
+
+      setMessages((prev) => [...prev, assistantMessage]);
+
+      const result = await model.generateContentStream(prompt);
+
+      let fullResponse = "";
+      for await (const chunk of result.stream) {
+        const chunkText = chunk.text();
+        fullResponse += chunkText;
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === assistantMessageId
+              ? { ...msg, content: fullResponse }
+              : msg,
+          ),
+        );
+      }
+    } catch (err) {
+      console.error("Lore extraction error:", err);
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Failed to extract lore. Check your API key.",
+      );
+    } finally {
+      setIsExtracting(false);
     }
   };
 
@@ -988,6 +1052,14 @@ export function AIChatPanel({
             className="flex-1 px-4 py-2.5 bg-zinc-800 border border-zinc-700 rounded-lg text-zinc-100 placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500 resize-none text-sm"
             disabled={isLoading}
           />
+          <button
+            onClick={handleExtractLore}
+            disabled={isExtracting || !currentContent.trim()}
+            className="p-2 bg-indigo-600/20 text-indigo-400 hover:bg-indigo-600/30 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed shrink-0 flex items-center justify-center mr-2"
+            title="Extract Lore from Current Text"
+          >
+            <Sparkles className="w-5 h-5" />
+          </button>
           <button
             onClick={handleSend}
             disabled={

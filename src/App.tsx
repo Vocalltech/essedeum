@@ -30,6 +30,7 @@ import { ExportWorkspace } from "./components/workspaces/ExportWorkspace";
 import { WorldWorkspace } from "./components/workspaces/WorldWorkspace";
 import { BinderTree } from "./components/workspaces/BinderTree";
 import { SnapshotPanel } from "./components/workspaces/SnapshotPanel";
+import { LORE_TEMPLATES } from "./lib/templates";
 import {
   initDB,
   getProjects,
@@ -442,7 +443,7 @@ function App() {
         project_id: currentProject.id,
         title,
         type,
-        content: "",
+        content: LORE_TEMPLATES[type] || "",
       };
 
       const id = await saveLore(newLore);
