@@ -83,6 +83,20 @@ export interface ChatMemory {
   created_at?: string;
 }
 
+export interface MapPin {
+  id?: number;
+  project_id: number;
+  lore_id: number;
+  x: number;
+  y: number;
+  label: string;
+}
+
+export interface MapPinWithDetails extends MapPin {
+  lore_title?: string;
+  lore_type?: string;
+}
+
 export async function initDB(): Promise<void> {
   if (db) return;
   if (isInitializing) return;
@@ -183,6 +197,19 @@ export async function initDB(): Promise<void> {
         type TEXT NOT NULL DEFAULT 'ai_insight',
         created_at TEXT NOT NULL DEFAULT (datetime('now')),
         FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
+      )
+    `);
+
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS map_pins (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        project_id INTEGER NOT NULL,
+        lore_id INTEGER NOT NULL,
+        x REAL NOT NULL,
+        y REAL NOT NULL,
+        label TEXT NOT NULL,
+        FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+        FOREIGN KEY (lore_id) REFERENCES lore(id) ON DELETE CASCADE
       )
     `);
 
@@ -650,5 +677,59 @@ export async function getRandomChapterExcerpts(
   } catch (error) {
     console.error("Failed to get random excerpts:", error);
     return [];
+  }
+}
+
+// ==================== MAP PINS OPERATIONS ====================
+
+export async function getMapPins(
+  projectId: number,
+): Promise<MapPinWithDetails[]> {
+  const database = await ensureDB();
+  try {
+    return await database.select<MapPinWithDetails[]>(
+      `SELECT m.*, l.title as lore_title, l.type as lore_type
+       FROM map_pins m
+       LEFT JOIN lore l ON m.lore_id = l.id
+       WHERE m.project_id = ?`,
+      [projectId],
+    );
+  } catch (error) {
+    console.error("Failed to load map pins:", error);
+    throw error;
+  }
+}
+
+export async function saveMapPin(
+  pin: Omit<MapPin, "id"> | MapPin,
+): Promise<MapPin> {
+  const database = await ensureDB();
+  try {
+    if ("id" in pin && pin.id) {
+      await database.execute(
+        "UPDATE map_pins SET lore_id = ?, x = ?, y = ?, label = ? WHERE id = ?",
+        [pin.lore_id, pin.x, pin.y, pin.label, pin.id],
+      );
+      return pin as MapPin;
+    } else {
+      const result = await database.execute(
+        "INSERT INTO map_pins (project_id, lore_id, x, y, label) VALUES (?, ?, ?, ?, ?)",
+        [pin.project_id, pin.lore_id, pin.x, pin.y, pin.label],
+      );
+      return { ...pin, id: result.lastInsertId } as MapPin;
+    }
+  } catch (error) {
+    console.error("Failed to save map pin:", error);
+    throw error;
+  }
+}
+
+export async function deleteMapPin(id: number): Promise<void> {
+  const database = await ensureDB();
+  try {
+    await database.execute("DELETE FROM map_pins WHERE id = ?", [id]);
+  } catch (error) {
+    console.error("Failed to delete map pin:", error);
+    throw error;
   }
 }
