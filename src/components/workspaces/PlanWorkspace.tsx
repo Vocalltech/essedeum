@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   LayoutGrid,
   List as ListIcon,
@@ -25,6 +25,8 @@ interface PlanWorkspaceProps {
   currentProjectId: number;
   currentProject: Project;
   onUpdateKanbanColumns: (columns: string[]) => void;
+  focusText?: string;
+  clearFocusText?: () => void;
 }
 
 export function PlanWorkspace({
@@ -37,6 +39,8 @@ export function PlanWorkspace({
   currentProjectId,
   currentProject,
   onUpdateKanbanColumns,
+  focusText,
+  clearFocusText,
 }: PlanWorkspaceProps) {
   const [viewMode, setViewMode] = useState<"corkboard" | "timeline" | "kanban">(
     "corkboard",
@@ -107,6 +111,52 @@ export function PlanWorkspace({
       setCurrentParentId(currentParent.parent_id || null);
     }
   };
+
+  useEffect(() => {
+    if (focusText) {
+      if (viewMode !== "timeline") {
+        setViewMode("timeline");
+        return;
+      }
+
+      const timer = setTimeout(() => {
+        const targetEvent = timelineEvents.find(
+          (e) =>
+            e.title.toLowerCase().includes(focusText.toLowerCase()) ||
+            e.description.toLowerCase().includes(focusText.toLowerCase()) ||
+            e.date_label.toLowerCase().includes(focusText.toLowerCase()),
+        );
+
+        if (targetEvent && targetEvent.id) {
+          const el = document.getElementById(
+            `timeline-event-${targetEvent.id}`,
+          );
+          if (el) {
+            el.scrollIntoView({ behavior: "smooth", block: "center" });
+            el.classList.add(
+              "ring-2",
+              "ring-indigo-500",
+              "ring-offset-2",
+              "ring-offset-zinc-950",
+            );
+            setTimeout(() => {
+              el.classList.remove(
+                "ring-2",
+                "ring-indigo-500",
+                "ring-offset-2",
+                "ring-offset-zinc-950",
+              );
+            }, 2000);
+          }
+        }
+        if (clearFocusText) {
+          clearFocusText();
+        }
+      }, 100);
+
+      return () => clearTimeout(timer);
+    }
+  }, [focusText, viewMode, timelineEvents, clearFocusText]);
 
   return (
     <div className="flex-1 flex flex-col bg-zinc-950 overflow-hidden">
@@ -311,7 +361,10 @@ export function PlanWorkspace({
                     )}
                   </div>
                   {/* Timeline Card */}
-                  <div className="flex-1 bg-zinc-900 border border-zinc-800 rounded-xl p-5 shadow-lg mb-8 hover:border-indigo-500/50 transition-colors">
+                  <div
+                    id={`timeline-event-${event.id}`}
+                    className="flex-1 bg-zinc-900 border border-zinc-800 rounded-xl p-5 shadow-lg mb-8 hover:border-indigo-500/50 transition-all duration-500"
+                  >
                     <div className="flex items-start justify-between gap-4 mb-3">
                       <div className="flex-1">
                         <input

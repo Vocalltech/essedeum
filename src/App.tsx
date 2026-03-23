@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import {
   Book,
+  BookOpen,
   Plus,
   FolderOpen,
   History,
@@ -9,6 +10,7 @@ import {
   Map,
   PanelLeftClose,
   PanelLeft,
+  FileText,
   PanelRightClose,
   PanelRight,
   Maximize,
@@ -33,7 +35,7 @@ import { BinderTree } from "./components/workspaces/BinderTree";
 import { SnapshotPanel } from "./components/workspaces/SnapshotPanel";
 import { LoreReferencePanel } from "./components/workspaces/LoreReferencePanel";
 import { LORE_TEMPLATES } from "./lib/templates";
-import { OmniSearchModal } from "./components/OmniSearchModal";
+import { OmniSearchModal, SearchableItem } from "./components/OmniSearchModal";
 import {
   initDB,
   getProjects,
@@ -77,6 +79,7 @@ function App() {
     [],
   );
   const [timelineEvents, setTimelineEvents] = useState<TimelineEvent[]>([]);
+  const [searchIndex, setSearchIndex] = useState<SearchableItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [editingChapterId, setEditingChapterId] = useState<number | null>(null);
   const [showProjectSelector, setShowProjectSelector] = useState(false);
@@ -251,6 +254,73 @@ function App() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
+  // Build Search Index
+  useEffect(() => {
+    if (showOmniSearch && currentProject?.id) {
+      const buildSearchIndex = async () => {
+        const items: SearchableItem[] = [];
+
+        chapters.forEach((chapter) => {
+          if (chapter.type === "document") {
+            items.push({
+              id: chapter.id!,
+              type: "chapter",
+              title: chapter.title,
+              content: chapter.content,
+              icon: <FileText className="w-4 h-4 text-blue-400" />,
+            });
+          }
+        });
+
+        loreEntries.forEach((lore) => {
+          items.push({
+            id: lore.id!,
+            type: "lore",
+            title: lore.title,
+            content: lore.content,
+            icon: <BookOpen className="w-4 h-4 text-emerald-400" />,
+          });
+        });
+
+        timelineEvents.forEach((event) => {
+          items.push({
+            id: event.id!,
+            type: "timeline",
+            title: event.title,
+            subtitle: event.date_label,
+            content: event.description,
+            icon: <List className="w-4 h-4 text-purple-400" />,
+          });
+        });
+
+        try {
+          const snaps = await getSnapshotsForProject(currentProject.id!);
+          snaps.forEach((snap) => {
+            items.push({
+              id: snap.id!,
+              type: "snapshot",
+              title: `${snap.chapter_title || "Unknown Chapter"} - ${snap.label}`,
+              content: snap.content,
+              icon: <History className="w-4 h-4 text-amber-400" />,
+            });
+          });
+        } catch (error) {
+          console.error("Failed to load snapshots for search index:", error);
+        }
+
+        setSearchIndex(items);
+      };
+
+      buildSearchIndex();
+    }
+  }, [
+    showOmniSearch,
+    currentProject?.id,
+    chapters,
+    loreEntries,
+    timelineEvents,
+  ]);
+
   // Load all projects
   const loadProjects = async () => {
     try {
@@ -373,7 +443,7 @@ function App() {
   };
 
   const handleOmniSearchNavigate = async (
-    type: "chapter" | "lore" | "snapshot",
+    type: string,
     id: number,
     term: string,
   ) => {
@@ -409,6 +479,8 @@ function App() {
       } catch (error) {
         console.error("Failed to fetch snapshots for navigation:", error);
       }
+    } else if (type === "timeline") {
+      setActiveMode("plan");
     }
   };
 
@@ -742,15 +814,15 @@ function App() {
         <OmniSearchModal
           isOpen={showOmniSearch}
           onClose={() => setShowOmniSearch(false)}
-          chapters={chapters}
-          loreEntries={loreEntries}
-          projectId={currentProject?.id || 0}
+          items={searchIndex}
           onNavigate={handleOmniSearchNavigate}
         />
 
         {/* Main Content - only show when we have a project */}
         {currentProject && activeMode === "plan" && (
           <PlanWorkspace
+            focusText={focusText}
+            clearFocusText={() => setFocusText("")}
             chapters={chapters}
             onUpdateChapter={handleUpdateChapter}
             onGenerateStructure={handleGenerateStructure}

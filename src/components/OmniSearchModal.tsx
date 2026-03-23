@@ -1,23 +1,25 @@
 import { useState, useEffect, useRef, useMemo } from "react";
-import { Search, FileText, BookOpen, History, X } from "lucide-react";
-import { Chapter, Lore, Snapshot, getSnapshotsForProject } from "../lib/db";
+import { Search, X } from "lucide-react";
+
+export interface SearchableItem {
+  id: number;
+  type: string;
+  title: string;
+  content: string;
+  icon: React.ReactNode;
+  subtitle?: string;
+}
 
 interface OmniSearchModalProps {
   isOpen: boolean;
   onClose: () => void;
-  chapters: Chapter[];
-  loreEntries: Lore[];
-  projectId: number;
-  onNavigate: (
-    type: "chapter" | "lore" | "snapshot",
-    id: number,
-    term: string,
-  ) => void;
+  items: SearchableItem[];
+  onNavigate: (type: string, id: number, term: string) => void;
 }
 
 interface SearchResult {
   id: number;
-  type: "chapter" | "lore" | "snapshot";
+  type: string;
   title: string;
   snippet: React.ReactNode;
   icon: React.ReactNode;
@@ -27,28 +29,22 @@ interface SearchResult {
 export function OmniSearchModal({
   isOpen,
   onClose,
-  chapters,
-  loreEntries,
-  projectId,
+  items,
   onNavigate,
 }: OmniSearchModalProps) {
   const [searchTerm, setSearchTerm] = useState("");
-  const [snapshots, setSnapshots] = useState<
-    (Snapshot & { chapter_title?: string })[]
-  >([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Fetch snapshots when modal opens
+  // Reset and focus when modal opens
   useEffect(() => {
-    if (isOpen && projectId) {
-      getSnapshotsForProject(projectId).then(setSnapshots).catch(console.error);
+    if (isOpen) {
       setSearchTerm("");
       setSelectedIndex(0);
       // Focus input
       setTimeout(() => inputRef.current?.focus(), 10);
     }
-  }, [isOpen, projectId]);
+  }, [isOpen]);
 
   // Strip HTML and get plain text safely
   const stripHtml = (html: string) => {
@@ -103,61 +99,32 @@ export function OmniSearchModal({
     const lowerTerm = searchTerm.toLowerCase();
     const found: SearchResult[] = [];
 
-    // Search Chapters
-    chapters.forEach((chapter) => {
-      if (chapter.type === "folder") return;
+    items.forEach((item) => {
+      const titleMatch = item.title.toLowerCase().includes(lowerTerm);
+      const contentMatch = item.content.toLowerCase().includes(lowerTerm);
+      const subtitleMatch = item.subtitle?.toLowerCase().includes(lowerTerm);
 
-      const titleMatch = chapter.title.toLowerCase().includes(lowerTerm);
-      const snippet = generateSnippet(chapter.content, searchTerm);
+      if (titleMatch || contentMatch || subtitleMatch) {
+        let snippet = generateSnippet(item.content, searchTerm);
+        if (!snippet && subtitleMatch) {
+          snippet = generateSnippet(item.subtitle!, searchTerm);
+        }
 
-      if (titleMatch || snippet) {
         found.push({
-          id: chapter.id!,
-          type: "chapter",
-          title: chapter.title,
-          snippet: snippet || <span className="text-zinc-500 italic">Matched in title</span>,
-          icon: <FileText className="w-4 h-4 text-blue-400" />,
-          score: titleMatch ? 2 : 1, // prioritize title matches
-        });
-      }
-    });
-
-    // Search Lore
-    loreEntries.forEach((lore) => {
-      const titleMatch = lore.title.toLowerCase().includes(lowerTerm);
-      const snippet = generateSnippet(lore.content, searchTerm);
-
-      if (titleMatch || snippet) {
-        found.push({
-          id: lore.id!,
-          type: "lore",
-          title: lore.title,
-          snippet: snippet || <span className="text-zinc-500 italic">Matched in title</span>,
-          icon: <BookOpen className="w-4 h-4 text-emerald-400" />,
-          score: titleMatch ? 2 : 1,
-        });
-      }
-    });
-
-    // Search Snapshots
-    snapshots.forEach((snap) => {
-      const titleMatch = snap.label.toLowerCase().includes(lowerTerm);
-      const snippet = generateSnippet(snap.content, searchTerm);
-
-      if (titleMatch || snippet) {
-        found.push({
-          id: snap.id!,
-          type: "snapshot",
-          title: `${snap.chapter_title || "Unknown Chapter"} - ${snap.label}`,
-          snippet: snippet || <span className="text-zinc-500 italic">Matched in label</span>,
-          icon: <History className="w-4 h-4 text-amber-400" />,
-          score: titleMatch ? 2 : 1,
+          id: item.id,
+          type: item.type,
+          title: item.title,
+          snippet: snippet || (
+            <span className="text-zinc-500 italic">Matched in title</span>
+          ),
+          icon: item.icon,
+          score: titleMatch ? 3 : subtitleMatch ? 2 : 1,
         });
       }
     });
 
     return found.sort((a, b) => b.score - a.score).slice(0, 20); // Top 20 results
-  }, [searchTerm, chapters, loreEntries, snapshots]);
+  }, [searchTerm, items]);
 
   // Reset selected index when results change
   useEffect(() => {
@@ -260,12 +227,18 @@ export function OmniSearchModal({
         <div className="px-4 py-2 bg-zinc-950/80 border-t border-zinc-800 flex items-center justify-between text-[10px] text-zinc-500 uppercase tracking-wider font-semibold">
           <div className="flex items-center gap-4">
             <span className="flex items-center gap-1">
-              <kbd className="px-1.5 py-0.5 bg-zinc-800 rounded font-sans text-[10px]">↑</kbd>
-              <kbd className="px-1.5 py-0.5 bg-zinc-800 rounded font-sans text-[10px]">↓</kbd>
+              <kbd className="px-1.5 py-0.5 bg-zinc-800 rounded font-sans text-[10px]">
+                ↑
+              </kbd>
+              <kbd className="px-1.5 py-0.5 bg-zinc-800 rounded font-sans text-[10px]">
+                ↓
+              </kbd>
               Navigate
             </span>
             <span className="flex items-center gap-1">
-              <kbd className="px-1.5 py-0.5 bg-zinc-800 rounded font-sans text-[10px]">Enter</kbd>
+              <kbd className="px-1.5 py-0.5 bg-zinc-800 rounded font-sans text-[10px]">
+                Enter
+              </kbd>
               Open
             </span>
           </div>
