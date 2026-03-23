@@ -418,7 +418,7 @@ function App() {
           synopsis: beat.synopsis,
           sort_order: startingOrder + i,
           parent_id: null,
-          type: "document",
+          type: "folder",
         };
         const id = await saveChapter(newChapter);
         newChapters.push({ ...newChapter, id });

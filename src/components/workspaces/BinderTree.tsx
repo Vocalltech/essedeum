@@ -6,7 +6,8 @@ import {
   Folder,
   FolderOpen,
   Trash2,
-  Plus,
+  FolderPlus,
+  FilePlus,
 } from "lucide-react";
 import { Chapter } from "../../lib/db";
 
@@ -127,17 +128,30 @@ function TreeNode({
         {!isEditing && (
           <div className="opacity-0 group-hover:opacity-100 flex items-center gap-1 shrink-0 ml-2">
             {isFolder && onAddChild && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onAddChild(chapter.id!, "document");
-                  if (!isExpanded) toggleFolder(chapter.id!, e);
-                }}
-                className="p-1 rounded hover:bg-zinc-700 text-zinc-400 hover:text-zinc-200 transition-colors"
-                title="Add document inside"
-              >
-                <Plus className="w-3.5 h-3.5" />
-              </button>
+              <>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onAddChild(chapter.id!, "folder");
+                    if (!isExpanded) toggleFolder(chapter.id!, e);
+                  }}
+                  className="p-1 rounded hover:bg-zinc-700 text-zinc-400 hover:text-zinc-200 transition-colors"
+                  title="Add folder inside"
+                >
+                  <FolderPlus className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onAddChild(chapter.id!, "document");
+                    if (!isExpanded) toggleFolder(chapter.id!, e);
+                  }}
+                  className="p-1 rounded hover:bg-zinc-700 text-zinc-400 hover:text-zinc-200 transition-colors"
+                  title="Add document inside"
+                >
+                  <FilePlus className="w-3.5 h-3.5" />
+                </button>
+              </>
             )}
             <button
               onClick={(e) => onDelete(chapter, e)}

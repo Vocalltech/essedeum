@@ -1,5 +1,12 @@
 import { useState } from "react";
-import { LayoutGrid, List as ListIcon, Sparkles } from "lucide-react";
+import {
+  LayoutGrid,
+  List as ListIcon,
+  Sparkles,
+  Folder,
+  FileText,
+  CornerLeftUp,
+} from "lucide-react";
 import { Chapter } from "../../lib/db";
 import { STORY_TEMPLATES } from "../../lib/templates";
 
@@ -17,17 +24,45 @@ export function PlanWorkspace({
   const [viewMode, setViewMode] = useState<"corkboard" | "timeline">(
     "corkboard",
   );
+  const [currentParentId, setCurrentParentId] = useState<number | null>(null);
 
-  // Filter to only show documents (skip folders) for the planning view
+  const currentParent = chapters.find((c) => c.id === currentParentId);
+
+  // Filter to only show children of the current folder
   const documents = chapters
-    .filter((c) => c.type === "document" || !c.type)
+    .filter((c) => c.parent_id === currentParentId)
     .sort((a, b) => a.sort_order - b.sort_order);
+
+  const handleDoubleClick = (chapter: Chapter) => {
+    if (chapter.type === "folder") {
+      setCurrentParentId(chapter.id!);
+    }
+  };
+
+  const handleGoUp = () => {
+    if (currentParent) {
+      setCurrentParentId(currentParent.parent_id || null);
+    }
+  };
 
   return (
     <div className="flex-1 flex flex-col bg-zinc-950 overflow-hidden">
       {/* Header */}
       <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-800 bg-zinc-900">
-        <h2 className="text-xl font-semibold text-zinc-100">Planning Board</h2>
+        <div className="flex items-center gap-3">
+          {currentParentId !== null && (
+            <button
+              onClick={handleGoUp}
+              className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800 transition-colors"
+              title="Go up one level"
+            >
+              <CornerLeftUp className="w-5 h-5" />
+            </button>
+          )}
+          <h2 className="text-xl font-semibold text-zinc-100">
+            {currentParent ? currentParent.title : "Planning Board"}
+          </h2>
+        </div>
         <div className="flex items-center gap-4">
           {documents.length > 0 && onGenerateStructure && (
             <div className="relative group">
@@ -82,9 +117,11 @@ export function PlanWorkspace({
           <div className="h-full flex flex-col items-center justify-center text-zinc-500">
             <LayoutGrid className="w-16 h-16 opacity-30 mb-4" />
             <p className="mb-6">
-              No documents found in the binder. Create a chapter first.
+              {currentParentId !== null
+                ? "This folder is empty. Add a document or sub-folder."
+                : "No documents found in the binder. Create a chapter first."}
             </p>
-            {onGenerateStructure && (
+            {onGenerateStructure && currentParentId === null && (
               <div className="flex flex-col items-center gap-3">
                 <div className="text-sm font-medium text-zinc-400 uppercase tracking-wider">
                   Or Generate a Structure
@@ -109,25 +146,50 @@ export function PlanWorkspace({
             {documents.map((doc) => (
               <div
                 key={doc.id}
-                className="bg-[#2a2a2a] bg-gradient-to-br from-zinc-800 to-zinc-900 border border-zinc-700/50 rounded-xl p-4 shadow-xl flex flex-col min-h-[240px] relative overflow-hidden group"
+                onDoubleClick={() => handleDoubleClick(doc)}
+                className="bg-[#2a2a2a] bg-gradient-to-br from-zinc-800 to-zinc-900 border border-zinc-700/50 rounded-xl p-4 shadow-xl flex flex-col min-h-[240px] relative overflow-hidden group cursor-pointer hover:border-indigo-500/50 transition-colors"
               >
                 <div className="absolute top-0 left-0 w-full h-1 bg-indigo-500/50 group-hover:bg-indigo-500 transition-colors" />
-                <input
-                  value={doc.title}
-                  onChange={(e) =>
-                    onUpdateChapter({ ...doc, title: e.target.value })
-                  }
-                  className="text-lg font-bold text-zinc-100 bg-transparent border-none focus:outline-none focus:ring-1 focus:ring-indigo-500/50 rounded px-1 mb-3 placeholder-zinc-600"
-                  placeholder="Scene Title"
-                />
+
+                <div className="flex items-center gap-2 mb-3">
+                  {doc.type === "folder" ? (
+                    <Folder className="w-5 h-5 text-indigo-400 shrink-0" />
+                  ) : (
+                    <FileText className="w-5 h-5 text-zinc-500 shrink-0" />
+                  )}
+                  <input
+                    value={doc.title}
+                    onChange={(e) =>
+                      onUpdateChapter({ ...doc, title: e.target.value })
+                    }
+                    className="text-lg font-bold text-zinc-100 bg-transparent border-none focus:outline-none focus:ring-1 focus:ring-indigo-500/50 rounded px-1 placeholder-zinc-600 w-full"
+                    placeholder={
+                      doc.type === "folder" ? "Folder Title" : "Scene Title"
+                    }
+                    onClick={(e) => e.stopPropagation()}
+                    onDoubleClick={(e) => e.stopPropagation()}
+                  />
+                </div>
                 <textarea
                   value={doc.synopsis || ""}
                   onChange={(e) =>
                     onUpdateChapter({ ...doc, synopsis: e.target.value })
                   }
-                  placeholder="Write a synopsis or goal for this scene..."
+                  placeholder={
+                    doc.type === "folder"
+                      ? "Write a synopsis for this act/folder..."
+                      : "Write a synopsis or goal for this scene..."
+                  }
                   className="flex-1 bg-transparent text-sm text-zinc-400 resize-none focus:outline-none focus:ring-1 focus:ring-indigo-500/50 rounded px-1 leading-relaxed"
+                  onClick={(e) => e.stopPropagation()}
+                  onDoubleClick={(e) => e.stopPropagation()}
                 />
+
+                {doc.type === "folder" && (
+                  <div className="absolute bottom-2 right-3 text-[10px] text-zinc-500 uppercase font-bold tracking-wider opacity-0 group-hover:opacity-100 transition-opacity">
+                    Double-click to open
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -145,23 +207,49 @@ export function PlanWorkspace({
                   )}
                 </div>
                 {/* Timeline Card */}
-                <div className="flex-1 bg-zinc-900 border border-zinc-800 rounded-xl p-5 shadow-lg mb-8">
-                  <input
-                    value={doc.title}
-                    onChange={(e) =>
-                      onUpdateChapter({ ...doc, title: e.target.value })
-                    }
-                    className="text-lg font-semibold text-zinc-100 bg-transparent border-none focus:outline-none focus:ring-1 focus:ring-indigo-500/50 rounded px-1 mb-3 w-full"
-                    placeholder="Scene Title"
-                  />
+                <div
+                  className="flex-1 bg-zinc-900 border border-zinc-800 rounded-xl p-5 shadow-lg mb-8 cursor-pointer hover:border-indigo-500/50 transition-colors relative group"
+                  onDoubleClick={() => handleDoubleClick(doc)}
+                >
+                  <div className="flex items-center gap-2 mb-3">
+                    {doc.type === "folder" ? (
+                      <Folder className="w-5 h-5 text-indigo-400 shrink-0" />
+                    ) : (
+                      <FileText className="w-5 h-5 text-zinc-500 shrink-0" />
+                    )}
+                    <input
+                      value={doc.title}
+                      onChange={(e) =>
+                        onUpdateChapter({ ...doc, title: e.target.value })
+                      }
+                      className="text-lg font-semibold text-zinc-100 bg-transparent border-none focus:outline-none focus:ring-1 focus:ring-indigo-500/50 rounded px-1 w-full"
+                      placeholder={
+                        doc.type === "folder" ? "Folder Title" : "Scene Title"
+                      }
+                      onClick={(e) => e.stopPropagation()}
+                      onDoubleClick={(e) => e.stopPropagation()}
+                    />
+                  </div>
                   <textarea
                     value={doc.synopsis || ""}
                     onChange={(e) =>
                       onUpdateChapter({ ...doc, synopsis: e.target.value })
                     }
-                    placeholder="Write a synopsis or goal for this scene..."
+                    placeholder={
+                      doc.type === "folder"
+                        ? "Write a synopsis for this act/folder..."
+                        : "Write a synopsis or goal for this scene..."
+                    }
                     className="w-full h-24 bg-zinc-950/50 border border-zinc-800/50 rounded-lg p-3 text-sm text-zinc-400 resize-none focus:outline-none focus:border-indigo-500/50 transition-colors"
+                    onClick={(e) => e.stopPropagation()}
+                    onDoubleClick={(e) => e.stopPropagation()}
                   />
+
+                  {doc.type === "folder" && (
+                    <div className="absolute bottom-2 right-4 text-[10px] text-zinc-500 uppercase font-bold tracking-wider opacity-0 group-hover:opacity-100 transition-opacity">
+                      Double-click to open
+                    </div>
+                  )}
                 </div>
               </div>
             ))}
