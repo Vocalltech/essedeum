@@ -959,6 +959,7 @@ function App() {
                         onChange={handleContentChange}
                         placeholder="Start writing your story... Type @ to mention characters or locations."
                         loreEntries={loreEntries}
+                        apiKey={apiKey}
                       />
                     </div>
                   </div>

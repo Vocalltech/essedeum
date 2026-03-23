@@ -369,6 +369,7 @@ export function WorldWorkspace({
                         loreEntries={loreEntries.filter(
                           (l) => !deletedLoreIds.has(l.id!),
                         )}
+                        apiKey={apiKey}
                       />
                     </div>
                   </>
