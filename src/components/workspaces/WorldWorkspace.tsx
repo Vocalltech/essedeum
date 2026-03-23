@@ -35,6 +35,8 @@ import {
 } from "../../lib/db";
 
 interface WorldWorkspaceProps {
+  focusText?: string;
+  clearFocusText?: () => void;
   loreEntries: Lore[];
   selectedLore: Lore | null;
   onSelectLore: (lore: Lore | null) => void;
@@ -67,6 +69,8 @@ const TYPE_ICONS: Record<string, React.ElementType> = {
 };
 
 export function WorldWorkspace({
+  focusText,
+  clearFocusText,
   loreEntries,
   selectedLore,
   onSelectLore,
@@ -370,6 +374,8 @@ export function WorldWorkspace({
                           (l) => !deletedLoreIds.has(l.id!),
                         )}
                         apiKey={apiKey}
+                        focusText={focusText}
+                        clearFocusText={clearFocusText}
                       />
                     </div>
                   </>

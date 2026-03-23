@@ -33,6 +33,7 @@ import { BinderTree } from "./components/workspaces/BinderTree";
 import { SnapshotPanel } from "./components/workspaces/SnapshotPanel";
 import { LoreReferencePanel } from "./components/workspaces/LoreReferencePanel";
 import { LORE_TEMPLATES } from "./lib/templates";
+import { OmniSearchModal } from "./components/OmniSearchModal";
 import {
   initDB,
   getProjects,
@@ -47,6 +48,7 @@ import {
   updateLoreImage,
   getRelationships,
   addRelationship,
+  getSnapshotsForProject,
   deleteRelationship,
   Project,
   Chapter,
@@ -73,6 +75,8 @@ function App() {
   const [editingChapterId, setEditingChapterId] = useState<number | null>(null);
   const [showProjectSelector, setShowProjectSelector] = useState(false);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
+  const [showOmniSearch, setShowOmniSearch] = useState(false);
+  const [focusText, setFocusText] = useState("");
   const [rightSidebarTab, setRightSidebarTab] = useState<
     "wiki" | "graph" | "ai" | "map" | "snapshots"
   >("wiki");
@@ -223,6 +227,23 @@ function App() {
     }
   }, [currentProject?.id]);
 
+  // Global keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (
+        (e.metaKey || e.ctrlKey) &&
+        e.shiftKey &&
+        e.key.toLowerCase() === "f"
+      ) {
+        e.preventDefault();
+        setShowOmniSearch(true);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
   // Load all projects
   const loadProjects = async () => {
     try {
@@ -335,6 +356,46 @@ function App() {
       }
     } catch (error) {
       console.error("Failed to update chapter:", error);
+    }
+  };
+
+  const handleOmniSearchNavigate = async (
+    type: "chapter" | "lore" | "snapshot",
+    id: number,
+    term: string,
+  ) => {
+    if (type === "chapter") {
+      const chapter = chapters.find((c) => c.id === id);
+      if (chapter) {
+        setSelectedChapter(chapter);
+        setSelectedLore(null);
+        setFocusText(term);
+        setActiveMode("write");
+      }
+    } else if (type === "lore") {
+      const lore = loreEntries.find((l) => l.id === id);
+      if (lore) {
+        setSelectedLore(lore);
+        setFocusText(term);
+        setRightSidebarTab("wiki");
+        setActiveMode("world");
+      }
+    } else if (type === "snapshot" && currentProject?.id) {
+      try {
+        const snaps = await getSnapshotsForProject(currentProject.id);
+        const snap = snaps.find((s) => s.id === id);
+        if (snap) {
+          const chapter = chapters.find((c) => c.id === snap.chapter_id);
+          if (chapter) {
+            setSelectedChapter(chapter);
+            setFocusText(term);
+            setRightSidebarTab("snapshots");
+            setActiveMode("write");
+          }
+        }
+      } catch (error) {
+        console.error("Failed to fetch snapshots for navigation:", error);
+      }
     }
   };
 
@@ -591,6 +652,7 @@ function App() {
           onSettingsClick={() =>
             setShowTypographySettings(!showTypographySettings)
           }
+          onSearchClick={() => setShowOmniSearch(true)}
         />
       )}
 
@@ -637,6 +699,15 @@ function App() {
           />
         )}
 
+        <OmniSearchModal
+          isOpen={showOmniSearch}
+          onClose={() => setShowOmniSearch(false)}
+          chapters={chapters}
+          loreEntries={loreEntries}
+          projectId={currentProject?.id || 0}
+          onNavigate={handleOmniSearchNavigate}
+        />
+
         {/* Main Content - only show when we have a project */}
         {currentProject && activeMode === "plan" && (
           <PlanWorkspace
@@ -650,6 +721,8 @@ function App() {
         )}
         {currentProject && activeMode === "world" && (
           <WorldWorkspace
+            focusText={focusText}
+            clearFocusText={() => setFocusText("")}
             loreEntries={loreEntries}
             selectedLore={selectedLore}
             onSelectLore={(lore) => {
@@ -996,6 +1069,8 @@ function App() {
                         placeholder="Start writing your story... Type @ to mention characters or locations."
                         loreEntries={loreEntries}
                         apiKey={apiKey}
+                        focusText={focusText}
+                        clearFocusText={() => setFocusText("")}
                       />
                     </div>
                   </div>

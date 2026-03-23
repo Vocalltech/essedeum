@@ -367,6 +367,25 @@ export async function getSnapshots(chapterId: number): Promise<Snapshot[]> {
   }
 }
 
+export async function getSnapshotsForProject(
+  projectId: number,
+): Promise<(Snapshot & { chapter_title?: string })[]> {
+  const database = await ensureDB();
+  try {
+    return await database.select<(Snapshot & { chapter_title?: string })[]>(
+      `SELECT s.*, c.title as chapter_title
+       FROM chapter_snapshots s
+       JOIN chapters c ON s.chapter_id = c.id
+       WHERE c.project_id = ?
+       ORDER BY s.created_at DESC`,
+      [projectId],
+    );
+  } catch (error) {
+    console.error("Failed to get snapshots for project:", error);
+    throw error;
+  }
+}
+
 export async function saveSnapshot(snapshot: Snapshot): Promise<number> {
   const database = await ensureDB();
   try {

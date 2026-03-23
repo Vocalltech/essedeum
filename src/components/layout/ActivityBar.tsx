@@ -4,6 +4,7 @@ import {
   LayoutDashboard,
   Upload,
   Settings,
+  Search,
 } from "lucide-react";
 
 export type AppMode = "write" | "plan" | "world" | "export";
@@ -12,12 +13,14 @@ interface ActivityBarProps {
   activeMode: AppMode;
   onModeSelect: (mode: AppMode) => void;
   onSettingsClick: () => void;
+  onSearchClick: () => void;
 }
 
 export function ActivityBar({
   activeMode,
   onModeSelect,
   onSettingsClick,
+  onSearchClick,
 }: ActivityBarProps) {
   const modes: { id: AppMode; icon: React.ElementType; label: string }[] = [
     { id: "write", icon: BookOpen, label: "Write" },
@@ -53,6 +56,13 @@ export function ActivityBar({
       </div>
 
       <div className="flex flex-col gap-4 w-full items-center">
+        <button
+          onClick={onSearchClick}
+          title="Search (Cmd+Shift+F)"
+          className="p-2.5 rounded-lg text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/50 transition-colors w-10 flex items-center justify-center"
+        >
+          <Search className="w-5 h-5" />
+        </button>
         <button
           onClick={onSettingsClick}
           title="Settings"

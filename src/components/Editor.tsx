@@ -21,6 +21,8 @@ interface EditorProps {
   placeholder?: string;
   loreEntries?: Lore[];
   apiKey?: string;
+  focusText?: string;
+  clearFocusText?: () => void;
 }
 
 export function Editor({
@@ -29,6 +31,8 @@ export function Editor({
   placeholder = "Start writing your story...",
   loreEntries = [],
   apiKey,
+  focusText,
+  clearFocusText,
 }: EditorProps) {
   const [typewriterMode, setTypewriterMode] = useState(false);
   const [showNoteModal, setShowNoteModal] = useState(false);
@@ -212,6 +216,41 @@ export function Editor({
       editor.commands.setContent(content);
     }
   }, [content, editor]);
+
+  // Handle focusText for OmniSearch
+  useEffect(() => {
+    if (editor && focusText) {
+      setTimeout(() => {
+        let found = false;
+        editor.state.doc.descendants((node, pos) => {
+          if (found) return false;
+          if (node.isText && node.text) {
+            const index = node.text
+              .toLowerCase()
+              .indexOf(focusText.toLowerCase());
+            if (index !== -1) {
+              const from = pos + index;
+              const to = from + focusText.length;
+
+              editor
+                .chain()
+                .focus()
+                .setTextSelection({ from, to })
+                .scrollIntoView()
+                .run();
+
+              found = true;
+              return false;
+            }
+          }
+        });
+
+        if (clearFocusText) {
+          clearFocusText();
+        }
+      }, 100);
+    }
+  }, [editor, focusText, clearFocusText]);
 
   // Update typewriter mode option
   useEffect(() => {
