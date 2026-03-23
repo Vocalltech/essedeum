@@ -68,6 +68,16 @@ export interface RelationshipWithDetails extends Relationship {
   target_type?: string;
 }
 
+export interface TimelineEvent {
+  id?: number;
+  project_id: number;
+  title: string;
+  date_label: string;
+  description: string;
+  linked_chapter_id?: number | null;
+  sort_order: number;
+}
+
 export type MemoryType =
   | "plot_point"
   | "world_rule"
@@ -213,7 +223,19 @@ export async function initDB(): Promise<void> {
       )
     `);
 
-    console.log("Database initialized successfully");
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS timeline_events (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        project_id INTEGER NOT NULL,
+        title TEXT NOT NULL,
+        date_label TEXT NOT NULL,
+        description TEXT NOT NULL DEFAULT '',
+        linked_chapter_id INTEGER,
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+        FOREIGN KEY (linked_chapter_id) REFERENCES chapters(id) ON DELETE SET NULL
+      )
+    `);
   } catch (error) {
     console.error("Failed to initialize database:", error);
     db = null;
@@ -560,6 +582,69 @@ export async function deleteRelationship(id: number): Promise<void> {
     await database.execute("DELETE FROM relationships WHERE id = ?", [id]);
   } catch (error) {
     console.error("Failed to delete relationship:", error);
+    throw error;
+  }
+}
+
+// --- Timeline Events ---
+
+export async function getTimelineEvents(
+  projectId: number,
+): Promise<TimelineEvent[]> {
+  const database = await ensureDB();
+  try {
+    return await database.select<TimelineEvent[]>(
+      "SELECT * FROM timeline_events WHERE project_id = ? ORDER BY sort_order ASC",
+      [projectId],
+    );
+  } catch (error) {
+    console.error("Failed to get timeline events:", error);
+    throw error;
+  }
+}
+
+export async function saveTimelineEvent(event: TimelineEvent): Promise<number> {
+  const database = await ensureDB();
+  try {
+    if (event.id) {
+      await database.execute(
+        "UPDATE timeline_events SET title = ?, date_label = ?, description = ?, linked_chapter_id = ?, sort_order = ? WHERE id = ?",
+        [
+          event.title,
+          event.date_label || "",
+          event.description || "",
+          event.linked_chapter_id || null,
+          event.sort_order,
+          event.id,
+        ],
+      );
+      return event.id;
+    } else {
+      const result = await database.execute(
+        "INSERT INTO timeline_events (project_id, title, date_label, description, linked_chapter_id, sort_order) VALUES (?, ?, ?, ?, ?, ?)",
+        [
+          event.project_id,
+          event.title,
+          event.date_label || "",
+          event.description || "",
+          event.linked_chapter_id || null,
+          event.sort_order,
+        ],
+      );
+      return result.lastInsertId || 0;
+    }
+  } catch (error) {
+    console.error("Failed to save timeline event:", error);
+    throw error;
+  }
+}
+
+export async function deleteTimelineEvent(id: number): Promise<void> {
+  const database = await ensureDB();
+  try {
+    await database.execute("DELETE FROM timeline_events WHERE id = ?", [id]);
+  } catch (error) {
+    console.error("Failed to delete timeline event:", error);
     throw error;
   }
 }

@@ -50,10 +50,14 @@ import {
   addRelationship,
   getSnapshotsForProject,
   deleteRelationship,
+  getTimelineEvents,
+  saveTimelineEvent,
+  deleteTimelineEvent,
   Project,
   Chapter,
   Lore,
   RelationshipWithDetails,
+  TimelineEvent,
 } from "./lib/db";
 
 const API_KEY_STORAGE_KEY = "essedeum_gemini_api_key";
@@ -71,6 +75,7 @@ function App() {
   const [relationships, setRelationships] = useState<RelationshipWithDetails[]>(
     [],
   );
+  const [timelineEvents, setTimelineEvents] = useState<TimelineEvent[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [editingChapterId, setEditingChapterId] = useState<number | null>(null);
   const [showProjectSelector, setShowProjectSelector] = useState(false);
@@ -221,6 +226,7 @@ function App() {
       setChapters([]);
       setLoreEntries([]);
       setRelationships([]);
+      setTimelineEvents([]);
       setSelectedChapter(null);
       setSelectedLore(null);
       setOpenTabs([]);
@@ -266,16 +272,22 @@ function App() {
   // Load chapters, lore, and relationships for a project
   const loadProjectData = async (projectId: number) => {
     try {
-      const [loadedChapters, loadedLore, loadedRelationships] =
-        await Promise.all([
-          getChapters(projectId),
-          getLore(projectId),
-          getRelationships(projectId),
-        ]);
+      const [
+        loadedChapters,
+        loadedLore,
+        loadedRelationships,
+        loadedTimelineEvents,
+      ] = await Promise.all([
+        getChapters(projectId),
+        getLore(projectId),
+        getRelationships(projectId),
+        getTimelineEvents(projectId),
+      ]);
 
       setChapters(loadedChapters);
       setLoreEntries(loadedLore);
       setRelationships(loadedRelationships);
+      setTimelineEvents(loadedTimelineEvents);
       setSelectedChapter(null);
       setSelectedLore(null);
       setOpenTabs([]);
@@ -430,6 +442,33 @@ function App() {
       }
     } catch (error) {
       console.error("Failed to generate structure:", error);
+    }
+  };
+
+  const handleSaveTimelineEvent = async (event: TimelineEvent) => {
+    try {
+      const id = await saveTimelineEvent(event);
+      const savedEvent = { ...event, id };
+      setTimelineEvents((prev) => {
+        const exists = prev.find((e) => e.id === id);
+        if (exists) {
+          return prev.map((e) => (e.id === id ? savedEvent : e));
+        }
+        return [...prev, savedEvent].sort(
+          (a, b) => a.sort_order - b.sort_order,
+        );
+      });
+    } catch (error) {
+      console.error("Failed to save timeline event:", error);
+    }
+  };
+
+  const handleDeleteTimelineEvent = async (id: number) => {
+    try {
+      await deleteTimelineEvent(id);
+      setTimelineEvents((prev) => prev.filter((e) => e.id !== id));
+    } catch (error) {
+      console.error("Failed to delete timeline event:", error);
     }
   };
 
@@ -714,6 +753,10 @@ function App() {
             chapters={chapters}
             onUpdateChapter={handleUpdateChapter}
             onGenerateStructure={handleGenerateStructure}
+            timelineEvents={timelineEvents}
+            onSaveTimelineEvent={handleSaveTimelineEvent}
+            onDeleteTimelineEvent={handleDeleteTimelineEvent}
+            currentProjectId={currentProject.id!}
           />
         )}
         {currentProject && activeMode === "export" && (
