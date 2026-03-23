@@ -21,6 +21,7 @@ export interface Project {
   id?: number;
   name: string;
   description: string;
+  kanban_columns?: string;
   created_at?: string;
   updated_at?: string;
 }
@@ -34,6 +35,7 @@ export interface Chapter {
   sort_order: number;
   parent_id?: number | null;
   type?: "folder" | "document";
+  status?: string;
 }
 
 export interface Snapshot {
@@ -121,10 +123,20 @@ export async function initDB(): Promise<void> {
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT NOT NULL,
         description TEXT NOT NULL DEFAULT '',
+        kanban_columns TEXT NOT NULL DEFAULT '["To-Do","First Draft","Revising","Ready for Edit","Final"]',
         created_at TEXT NOT NULL DEFAULT (datetime('now')),
         updated_at TEXT NOT NULL DEFAULT (datetime('now'))
       )
     `);
+
+    // Migration for kanban_columns column
+    try {
+      await db.execute(
+        'ALTER TABLE projects ADD COLUMN kanban_columns TEXT NOT NULL DEFAULT \'["To-Do","First Draft","Revising","Ready for Edit","Final"]\'',
+      );
+    } catch (e) {
+      // Column likely already exists
+    }
 
     await db.execute(`
       CREATE TABLE IF NOT EXISTS chapters (
@@ -136,10 +148,20 @@ export async function initDB(): Promise<void> {
         sort_order INTEGER NOT NULL DEFAULT 0,
         parent_id INTEGER,
         type TEXT NOT NULL DEFAULT 'document',
+        status TEXT NOT NULL DEFAULT 'To-Do',
         FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
         FOREIGN KEY (parent_id) REFERENCES chapters(id) ON DELETE CASCADE
       )
     `);
+
+    // Migration for status column
+    try {
+      await db.execute(
+        "ALTER TABLE chapters ADD COLUMN status TEXT NOT NULL DEFAULT 'To-Do'",
+      );
+    } catch (e) {
+      // Column likely already exists
+    }
 
     try {
       await db.execute(
@@ -276,6 +298,22 @@ export async function createProject(
   }
 }
 
+export async function updateProjectKanbanColumns(
+  id: number,
+  kanbanColumns: string,
+): Promise<void> {
+  const database = await ensureDB();
+  try {
+    await database.execute(
+      "UPDATE projects SET kanban_columns = ?, updated_at = datetime('now') WHERE id = ?",
+      [kanbanColumns, id],
+    );
+  } catch (error) {
+    console.error("Failed to update project kanban columns:", error);
+    throw error;
+  }
+}
+
 export async function updateProject(
   id: number,
   name: string,
@@ -323,7 +361,7 @@ export async function saveChapter(chapter: Chapter): Promise<number> {
   try {
     if (chapter.id) {
       await database.execute(
-        "UPDATE chapters SET title = ?, content = ?, synopsis = ?, sort_order = ?, parent_id = ?, type = ? WHERE id = ?",
+        "UPDATE chapters SET title = ?, content = ?, synopsis = ?, sort_order = ?, parent_id = ?, type = ?, status = ? WHERE id = ?",
         [
           chapter.title,
           chapter.content,
@@ -331,6 +369,7 @@ export async function saveChapter(chapter: Chapter): Promise<number> {
           chapter.sort_order,
           chapter.parent_id || null,
           chapter.type || "document",
+          chapter.status || "To-Do",
           chapter.id,
         ],
       );
@@ -341,22 +380,23 @@ export async function saveChapter(chapter: Chapter): Promise<number> {
       return chapter.id;
     } else {
       const result = await database.execute(
-        "INSERT INTO chapters (project_id, title, content, synopsis, sort_order, parent_id, type) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO chapters (project_id, title, content, synopsis, sort_order, parent_id, type, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
         [
           chapter.project_id,
           chapter.title,
-          chapter.content,
+          chapter.content || "",
           chapter.synopsis || "",
           chapter.sort_order,
           chapter.parent_id || null,
           chapter.type || "document",
+          chapter.status || "To-Do",
         ],
       );
       await database.execute(
         "UPDATE projects SET updated_at = datetime('now') WHERE id = ?",
         [chapter.project_id],
       );
-      return result.lastInsertId as number;
+      return result.lastInsertId || 0;
     }
   } catch (error) {
     console.error("Failed to save chapter:", error);

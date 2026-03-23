@@ -39,6 +39,7 @@ import {
   getProjects,
   createProject,
   updateProject,
+  updateProjectKanbanColumns,
   deleteProject,
   getChapters,
   saveChapter,
@@ -757,6 +758,23 @@ function App() {
             onSaveTimelineEvent={handleSaveTimelineEvent}
             onDeleteTimelineEvent={handleDeleteTimelineEvent}
             currentProjectId={currentProject.id!}
+            currentProject={currentProject}
+            onUpdateKanbanColumns={async (columns: string[]) => {
+              if (currentProject.id) {
+                const columnsStr = JSON.stringify(columns);
+                await updateProjectKanbanColumns(currentProject.id, columnsStr);
+                const updatedProject = {
+                  ...currentProject,
+                  kanban_columns: columnsStr,
+                };
+                setCurrentProject(updatedProject);
+                setProjects(
+                  projects.map((p) =>
+                    p.id === currentProject.id ? updatedProject : p,
+                  ),
+                );
+              }
+            }}
           />
         )}
         {currentProject && activeMode === "export" && (
