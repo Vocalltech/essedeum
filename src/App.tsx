@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import {
   Book,
   BookOpen,
@@ -36,6 +36,9 @@ import { SnapshotPanel } from "./components/workspaces/SnapshotPanel";
 import { LoreReferencePanel } from "./components/workspaces/LoreReferencePanel";
 import { LORE_TEMPLATES } from "./lib/templates";
 import { OmniSearchModal, SearchableItem } from "./components/OmniSearchModal";
+import { SoundscapeBrowser } from "./components/SoundscapeBrowser";
+import { AudioTrack } from "./lib/audio";
+import YouTube, { YouTubePlayer } from "react-youtube";
 import {
   initDB,
   getProjects,
@@ -106,6 +109,96 @@ function App() {
   const [editorFontSize, setEditorFontSize] = useState<string>("text-base");
   const [editorWidth, setEditorWidth] = useState<string>("max-w-3xl");
   const [showTypographySettings, setShowTypographySettings] = useState(false);
+
+  // Audio state
+  const [showSoundscape, setShowSoundscape] = useState(false);
+  const [currentTrack, setCurrentTrack] = useState<AudioTrack | null>(null);
+  const [audioPlaylist, setAudioPlaylist] = useState<AudioTrack[]>([]);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [isLooping, setIsLooping] = useState(false);
+  const [volume, setVolume] = useState(0.5);
+  const ytPlayerRef = useRef<YouTubePlayer | null>(null);
+  const audioRef = useRef<HTMLAudioElement>(null);
+
+  useEffect(() => {
+    if (ytPlayerRef.current) {
+      ytPlayerRef.current.setVolume(volume * 100);
+    }
+    if (audioRef.current) {
+      audioRef.current.volume = volume;
+    }
+  }, [volume]);
+
+  useEffect(() => {
+    if (currentTrack?.type === "youtube") {
+      if (audioRef.current) {
+        audioRef.current.pause();
+      }
+      if (ytPlayerRef.current) {
+        if (isPlaying) {
+          ytPlayerRef.current.playVideo();
+        } else {
+          ytPlayerRef.current.pauseVideo();
+        }
+      }
+    } else if (currentTrack?.type === "stream") {
+      if (ytPlayerRef.current) {
+        ytPlayerRef.current.pauseVideo();
+      }
+      if (audioRef.current) {
+        if (isPlaying) {
+          audioRef.current.play().catch(console.error);
+        } else {
+          audioRef.current.pause();
+        }
+      }
+    } else {
+      if (audioRef.current) audioRef.current.pause();
+      if (ytPlayerRef.current) ytPlayerRef.current.pauseVideo();
+    }
+  }, [isPlaying, currentTrack]);
+
+  const handleTrackEnd = () => {
+    if (isLooping) {
+      if (currentTrack?.type === "youtube") {
+        ytPlayerRef.current?.seekTo(0);
+        ytPlayerRef.current?.playVideo();
+      } else if (currentTrack?.type === "stream" && audioRef.current) {
+        audioRef.current.currentTime = 0;
+        audioRef.current.play().catch(console.error);
+      }
+    } else {
+      handleNextTrack();
+    }
+  };
+
+  const handleNextTrack = () => {
+    if (audioPlaylist.length > 1) {
+      const currentIndex = audioPlaylist.findIndex(
+        (t) => t.id === currentTrack?.id,
+      );
+      if (currentIndex !== -1 && currentIndex < audioPlaylist.length - 1) {
+        setCurrentTrack(audioPlaylist[currentIndex + 1]);
+        setIsPlaying(true);
+      } else {
+        setIsPlaying(false);
+      }
+    } else {
+      setIsPlaying(false);
+    }
+  };
+
+  const handlePrevTrack = () => {
+    if (audioPlaylist.length > 1) {
+      const currentIndex = audioPlaylist.findIndex(
+        (t) => t.id === currentTrack?.id,
+      );
+      if (currentIndex > 0) {
+        setCurrentTrack(audioPlaylist[currentIndex - 1]);
+        setIsPlaying(true);
+      }
+    }
+  };
 
   // Close a tab
   // Sync selected chapter/lore with open tabs
@@ -818,6 +911,54 @@ function App() {
           onNavigate={handleOmniSearchNavigate}
         />
 
+        <SoundscapeBrowser
+          isOpen={showSoundscape}
+          onClose={() => setShowSoundscape(false)}
+          onPlayTrack={(track, playlist) => {
+            setCurrentTrack(track);
+            setAudioPlaylist(playlist);
+            setIsPlaying(true);
+          }}
+          currentTrackId={currentTrack?.id}
+          isPlaying={isPlaying}
+          onTogglePlay={() => setIsPlaying(!isPlaying)}
+        />
+
+        {currentTrack?.type === "youtube" && (
+          <div className="absolute w-0 h-0 overflow-hidden pointer-events-none opacity-0">
+            <YouTube
+              videoId={currentTrack.url}
+              opts={{
+                playerVars: {
+                  autoplay: 1,
+                  controls: 0,
+                  disablekb: 1,
+                  fs: 0,
+                },
+              }}
+              onReady={(event) => {
+                ytPlayerRef.current = event.target;
+                event.target.setVolume(volume * 100);
+                if (isPlaying) {
+                  event.target.playVideo();
+                } else {
+                  event.target.pauseVideo();
+                }
+              }}
+              onEnd={handleTrackEnd}
+            />
+          </div>
+        )}
+
+        {currentTrack?.type === "stream" && (
+          <audio
+            ref={audioRef}
+            src={currentTrack.url}
+            onEnded={handleTrackEnd}
+            loop={isLooping}
+          />
+        )}
+
         {/* Main Content - only show when we have a project */}
         {currentProject && activeMode === "plan" && (
           <PlanWorkspace
@@ -1369,7 +1510,6 @@ function App() {
         {/* Status Bar (Bottom) */}
         {currentProject && (
           <StatusBar
-            projectName={currentProject.name}
             wordCount={
               selectedChapter?.content
                 ? selectedChapter.content
@@ -1378,9 +1518,18 @@ function App() {
                     .filter((w) => w.length > 0).length
                 : 0
             }
-            targetWordCount={2000}
-            focusMode={zenMode}
-            onToggleFocusMode={() => setZenMode(!zenMode)}
+            isZenMode={zenMode}
+            onToggleZenMode={() => setZenMode(!zenMode)}
+            currentTrack={currentTrack}
+            isPlaying={isPlaying}
+            isLooping={isLooping}
+            volume={volume}
+            onTogglePlay={() => setIsPlaying(!isPlaying)}
+            onNextTrack={handleNextTrack}
+            onPrevTrack={handlePrevTrack}
+            onToggleLoop={() => setIsLooping(!isLooping)}
+            onVolumeChange={setVolume}
+            onOpenSoundscape={() => setShowSoundscape(true)}
           />
         )}
       </div>

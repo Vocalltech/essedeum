@@ -1,161 +1,184 @@
-import { useState, useEffect } from "react";
 import {
-  CheckCircle2,
-  Cloud,
+  Type,
   Maximize,
   Minimize,
-  Timer,
+  Volume2,
   Play,
-  Square,
+  Pause,
+  SkipForward,
+  SkipBack,
+  Repeat,
+  Headphones,
 } from "lucide-react";
+import { AudioTrack } from "../../lib/audio";
+import { useState } from "react";
 
 interface StatusBarProps {
-  projectName?: string;
   wordCount?: number;
-  targetWordCount?: number;
-  focusMode: boolean;
-  onToggleFocusMode: () => void;
-  syncStatus?: "saved" | "saving" | "error";
+  isZenMode?: boolean;
+  onToggleZenMode?: () => void;
+
+  // Audio Props
+  currentTrack?: AudioTrack | null;
+  isPlaying?: boolean;
+  isLooping?: boolean;
+  volume?: number;
+  onTogglePlay?: () => void;
+  onNextTrack?: () => void;
+  onPrevTrack?: () => void;
+  onToggleLoop?: () => void;
+  onVolumeChange?: (vol: number) => void;
+  onOpenSoundscape?: () => void;
 }
 
 export function StatusBar({
-  projectName = "No Project",
   wordCount = 0,
-  targetWordCount = 2000,
-  focusMode,
-  onToggleFocusMode,
-  syncStatus = "saved",
+  isZenMode = false,
+  onToggleZenMode,
+  currentTrack,
+  isPlaying,
+  isLooping,
+  volume = 0.5,
+  onTogglePlay,
+  onNextTrack,
+  onPrevTrack,
+  onToggleLoop,
+  onVolumeChange,
+  onOpenSoundscape,
 }: StatusBarProps) {
-  const [isSprintActive, setIsSprintActive] = useState(false);
-  const [timeLeft, setTimeLeft] = useState(25 * 60);
-  const [sprintStartWords, setSprintStartWords] = useState(0);
-
-  useEffect(() => {
-    let interval: NodeJS.Timeout;
-    if (isSprintActive && timeLeft > 0) {
-      interval = setInterval(() => {
-        setTimeLeft((prev) => prev - 1);
-      }, 1000);
-    } else if (timeLeft === 0 && isSprintActive) {
-      setIsSprintActive(false);
-    }
-    return () => clearInterval(interval);
-  }, [isSprintActive, timeLeft]);
-
-  const toggleSprint = () => {
-    if (isSprintActive) {
-      setIsSprintActive(false);
-    } else {
-      setSprintStartWords(wordCount);
-      setTimeLeft(25 * 60);
-      setIsSprintActive(true);
-    }
-  };
-
-  const formatTime = (seconds: number) => {
-    const m = Math.floor(seconds / 60);
-    const s = seconds % 60;
-    return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
-  };
-
-  const progressPercentage =
-    targetWordCount > 0
-      ? Math.min(Math.round((wordCount / targetWordCount) * 100), 100)
-      : 0;
+  const [showVolume, setShowVolume] = useState(false);
 
   return (
-    <div className="h-7 shrink-0 bg-zinc-950 border-t border-zinc-800 flex items-center justify-between px-3 text-[11px] font-medium text-zinc-500 z-20">
-      {/* Left side: Status and Project Info */}
+    <div className="h-8 shrink-0 bg-zinc-950 border-t border-zinc-800 flex items-center justify-between px-4 text-xs text-zinc-500 z-30 relative select-none">
+      {/* Left Side - Stats */}
       <div className="flex items-center gap-4">
-        <div
-          className="flex items-center gap-1.5"
-          title={`Sync Status: ${syncStatus}`}
-        >
-          {syncStatus === "saved" && (
-            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
-          )}
-          {syncStatus === "saving" && (
-            <Cloud className="w-3.5 h-3.5 text-blue-400 animate-pulse" />
-          )}
-          {syncStatus === "error" && (
-            <Cloud className="w-3.5 h-3.5 text-red-500" />
-          )}
-          <span className="capitalize">{syncStatus}</span>
+        <div className="flex items-center gap-1.5" title="Word Count">
+          <Type className="w-3.5 h-3.5" />
+          <span>{wordCount.toLocaleString()} words</span>
         </div>
         <div className="w-px h-3 bg-zinc-800" />
-        <span className="truncate max-w-[200px] text-zinc-400">
-          {projectName}
-        </span>
+        <div className="flex items-center gap-1.5 text-emerald-500/80">
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+          Saved
+        </div>
       </div>
 
-      {/* Right side: Word Count, Sprint, Focus Mode */}
-      <div className="flex items-center gap-4">
-        {/* Sprint Timer */}
-        <div className="flex items-center gap-3">
-          {isSprintActive && (
-            <span className="text-indigo-400 font-mono tracking-wider">
-              +{Math.max(0, wordCount - sprintStartWords)} w
+      {/* Right Side - Tools */}
+      <div className="flex items-center gap-2 h-full">
+        {/* Mini Player */}
+        {currentTrack ? (
+          <div className="flex items-center gap-2 mr-2 bg-zinc-900/50 rounded-full px-2 py-0.5 border border-zinc-800/50 h-6">
+            <button
+              onClick={onPrevTrack}
+              className="text-zinc-500 hover:text-zinc-300 transition-colors"
+              title="Previous Track"
+            >
+              <SkipBack className="w-3 h-3" />
+            </button>
+            <button
+              onClick={onTogglePlay}
+              className="text-indigo-400 hover:text-indigo-300 transition-colors"
+              title={isPlaying ? "Pause" : "Play"}
+            >
+              {isPlaying ? (
+                <Pause className="w-3.5 h-3.5" fill="currentColor" />
+              ) : (
+                <Play
+                  className="w-3.5 h-3.5 translate-x-px"
+                  fill="currentColor"
+                />
+              )}
+            </button>
+            <button
+              onClick={onNextTrack}
+              className="text-zinc-500 hover:text-zinc-300 transition-colors"
+              title="Next Track"
+            >
+              <SkipForward className="w-3 h-3" />
+            </button>
+
+            <div className="w-px h-3 bg-zinc-700 mx-1" />
+
+            <span
+              className="max-w-[120px] truncate text-[10px] font-medium text-zinc-300 cursor-pointer hover:text-indigo-400 transition-colors"
+              onClick={onOpenSoundscape}
+              title={currentTrack.title}
+            >
+              {currentTrack.title}
             </span>
-          )}
-          <button
-            onClick={toggleSprint}
-            className={`flex items-center gap-1.5 transition-colors ${
-              isSprintActive
-                ? "text-rose-400 hover:text-rose-300"
-                : "hover:text-zinc-300"
-            }`}
-            title={isSprintActive ? "Stop Sprint" : "Start 25m Sprint"}
-          >
-            {isSprintActive ? (
-              <Square className="w-3.5 h-3.5" />
-            ) : (
-              <Play className="w-3.5 h-3.5" />
-            )}
-            <Timer className="w-3.5 h-3.5" />
-            <span className="font-mono">{formatTime(timeLeft)}</span>
-          </button>
-        </div>
 
-        <div className="w-px h-3 bg-zinc-800" />
+            <div className="w-px h-3 bg-zinc-700 mx-1" />
 
-        {/* Word Count Progress */}
-        <div
-          className="flex items-center gap-2"
-          title={`${wordCount} / ${targetWordCount} words`}
-        >
-          <div className="w-16 h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+            <button
+              onClick={onToggleLoop}
+              className={`transition-colors ${isLooping ? "text-indigo-400" : "text-zinc-500 hover:text-zinc-300"}`}
+              title={isLooping ? "Looping Track" : "Loop Track"}
+            >
+              <Repeat className="w-3 h-3" />
+            </button>
+
             <div
-              className="h-full bg-indigo-500 transition-all duration-500"
-              style={{ width: `${progressPercentage}%` }}
-            />
+              className="relative flex items-center h-full"
+              onMouseEnter={() => setShowVolume(true)}
+              onMouseLeave={() => setShowVolume(false)}
+            >
+              <button className="text-zinc-500 hover:text-zinc-300 transition-colors ml-1">
+                <Volume2 className="w-3 h-3" />
+              </button>
+
+              {/* Volume Slider Dropdown */}
+              {showVolume && (
+                <div className="absolute bottom-full right-0 mb-2 w-24 bg-zinc-900 border border-zinc-800 rounded-lg p-2 shadow-xl flex items-center">
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.05"
+                    value={volume}
+                    onChange={(e) =>
+                      onVolumeChange &&
+                      onVolumeChange(parseFloat(e.target.value))
+                    }
+                    className="w-full h-1 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-indigo-500"
+                  />
+                </div>
+              )}
+            </div>
           </div>
-          <span className="w-24 text-right tabular-nums">
-            <span className="text-zinc-300">{wordCount.toLocaleString()}</span>
-            <span className="text-zinc-600">
-              {" "}
-              / {targetWordCount.toLocaleString()} w
+        ) : null}
+
+        {!currentTrack && (
+          <button
+            onClick={onOpenSoundscape}
+            className="flex items-center gap-1.5 px-2 hover:text-zinc-300 transition-colors hover:bg-zinc-800/50 rounded h-6"
+            title="Soundscapes"
+          >
+            <Headphones className="w-3.5 h-3.5" />
+            <span className="text-[10px] uppercase tracking-wider font-semibold">
+              Audio
             </span>
-          </span>
-        </div>
+          </button>
+        )}
 
-        <div className="w-px h-3 bg-zinc-800" />
+        <div className="w-px h-4 bg-zinc-800 mx-1" />
 
-        {/* Focus Mode Toggle */}
         <button
-          onClick={onToggleFocusMode}
-          title={focusMode ? "Exit Focus Mode" : "Enter Focus Mode"}
-          className={`flex items-center gap-1.5 transition-colors ${
-            focusMode
-              ? "text-indigo-400 hover:text-indigo-300"
-              : "hover:text-zinc-300"
+          onClick={onToggleZenMode}
+          className={`flex items-center gap-1.5 px-2 transition-colors rounded h-6 ${
+            isZenMode
+              ? "text-indigo-400 bg-indigo-500/10"
+              : "hover:text-zinc-300 hover:bg-zinc-800/50"
           }`}
+          title={isZenMode ? "Exit Focus Mode" : "Enter Focus Mode"}
         >
-          {focusMode ? (
+          {isZenMode ? (
             <Minimize className="w-3.5 h-3.5" />
           ) : (
             <Maximize className="w-3.5 h-3.5" />
           )}
-          <span>Focus</span>
+          <span className="text-[10px] uppercase tracking-wider font-semibold">
+            Focus
+          </span>
         </button>
       </div>
     </div>
