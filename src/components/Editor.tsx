@@ -1,4 +1,5 @@
 import { useEditor, EditorContent, ReactRenderer } from "@tiptap/react";
+import { BubbleMenu } from "@tiptap/react/menus";
 import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
 import Mention from "@tiptap/extension-mention";
@@ -32,9 +33,32 @@ export function Editor({
   const [typewriterMode, setTypewriterMode] = useState(false);
   const [showNoteModal, setShowNoteModal] = useState(false);
   const [noteText, setNoteText] = useState("");
-  const [showAiModal, setShowAiModal] = useState(false);
   const [aiPrompt, setAiPrompt] = useState("");
   const [isAiProcessing, setIsAiProcessing] = useState(false);
+  const [aiSelection, setAiSelection] = useState<{
+    from: number;
+    to: number;
+  } | null>(null);
+  const [originalText, setOriginalText] = useState("");
+  const [suggestedText, setSuggestedText] = useState("");
+  const aiRequestIdRef = useRef<number>(0);
+
+  // Add state to track if there is an active selection for the button visibility
+  const [hasSelection, setHasSelection] = useState(false);
+  const [isGhostNote, setIsGhostNote] = useState(false);
+  const [isAiMenuExpanded, setIsAiMenuExpanded] = useState(false);
+
+  // Keep state accessible to Tiptap callbacks that might have stale closures
+  const aiStateRef = useRef({
+    isAiProcessing: false,
+    suggestedText: "",
+    isAiMenuExpanded: false,
+  });
+
+  useEffect(() => {
+    aiStateRef.current = { isAiProcessing, suggestedText, isAiMenuExpanded };
+  }, [isAiProcessing, suggestedText, isAiMenuExpanded]);
+
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const loreEntriesRef = useRef<Lore[]>(loreEntries);
 
@@ -169,6 +193,17 @@ export function Editor({
         console.log("Saving...");
       }, 2000);
     },
+    onSelectionUpdate: ({ editor }) => {
+      setHasSelection(!editor.state.selection.empty);
+      setIsGhostNote(editor.isActive("ghostNote"));
+      if (
+        editor.isFocused &&
+        !aiStateRef.current?.isAiProcessing &&
+        !aiStateRef.current?.suggestedText
+      ) {
+        setIsAiMenuExpanded(false);
+      }
+    },
   });
 
   // Update editor content when prop changes (e.g., switching chapters)
@@ -190,16 +225,59 @@ export function Editor({
     }
   }, [typewriterMode, editor]);
 
+  const handleCancelAi = () => {
+    aiRequestIdRef.current = 0; // abort any pending
+    setIsAiProcessing(false);
+    setIsAiMenuExpanded(false);
+    setAiPrompt("");
+    setAiSelection(null);
+    setOriginalText("");
+    setSuggestedText("");
+    editor?.commands.focus();
+  };
+
+  const handleAcceptAi = () => {
+    if (editor && aiSelection && suggestedText) {
+      editor
+        .chain()
+        .focus()
+        .setTextSelection({ from: aiSelection.from, to: aiSelection.to })
+        .insertContent(suggestedText)
+        .run();
+    }
+    handleCancelAi();
+  };
+
   const handleAiAction = async (action: string, customPrompt?: string) => {
-    if (!editor || !apiKey || editor.state.selection.empty) {
+    if (!editor || !apiKey) {
       if (!apiKey) alert("Please set your API key in the AI Chat Panel first.");
       return;
     }
 
     const { from, to } = editor.state.selection;
-    const selectedText = editor.state.doc.textBetween(from, to, " ");
+    const selectionFrom = from !== to ? from : aiSelection?.from;
+    const selectionTo = from !== to ? to : aiSelection?.to;
+
+    if (
+      selectionFrom === undefined ||
+      selectionTo === undefined ||
+      selectionFrom === selectionTo
+    ) {
+      return;
+    }
+
+    const selectedText = editor.state.doc.textBetween(
+      selectionFrom,
+      selectionTo,
+      " ",
+    );
+
+    const requestId = Date.now();
+    aiRequestIdRef.current = requestId;
 
     setIsAiProcessing(true);
+    setAiSelection({ from: selectionFrom, to: selectionTo });
+    setOriginalText(selectedText);
 
     try {
       const genAI = new GoogleGenerativeAI(apiKey);
@@ -228,22 +306,24 @@ export function Editor({
       }
 
       const result = await model.generateContent(prompt);
+
+      // If a new request was started or it was cancelled, ignore this result
+      if (aiRequestIdRef.current !== requestId) return;
+
       const responseText = result.response.text().trim();
 
       if (responseText) {
-        editor
-          .chain()
-          .focus()
-          .insertContentAt({ from, to }, responseText)
-          .run();
+        setSuggestedText(responseText);
       }
     } catch (err) {
+      if (aiRequestIdRef.current !== requestId) return;
       console.error("AI Edit error:", err);
       alert(err instanceof Error ? err.message : "Failed to generate text");
+      handleCancelAi();
     } finally {
-      setIsAiProcessing(false);
-      setShowAiModal(false);
-      setAiPrompt("");
+      if (aiRequestIdRef.current === requestId) {
+        setIsAiProcessing(false);
+      }
     }
   };
 
@@ -319,86 +399,188 @@ export function Editor({
           padding: 0;
         }
       `}</style>
-      {showAiModal && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-4 w-full max-w-lg shadow-xl">
-            <h3 className="text-sm font-medium text-zinc-200 mb-3 flex items-center gap-2">
-              <Wand2 className="w-4 h-4 text-indigo-500" />
-              AI Magic Wand
-            </h3>
-
-            <div className="flex gap-2 mb-4 overflow-x-auto pb-2">
-              <button
-                onClick={() => handleAiAction("shorter")}
-                disabled={isAiProcessing}
-                className="px-3 py-1.5 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 border border-indigo-500/20 rounded text-xs font-medium transition-colors whitespace-nowrap disabled:opacity-50"
-              >
-                Make Shorter
-              </button>
-              <button
-                onClick={() => handleAiAction("descriptive")}
-                disabled={isAiProcessing}
-                className="px-3 py-1.5 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 border border-indigo-500/20 rounded text-xs font-medium transition-colors whitespace-nowrap disabled:opacity-50"
-              >
-                More Descriptive
-              </button>
-              <button
-                onClick={() => handleAiAction("grammar")}
-                disabled={isAiProcessing}
-                className="px-3 py-1.5 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 border border-indigo-500/20 rounded text-xs font-medium transition-colors whitespace-nowrap disabled:opacity-50"
-              >
-                Fix Grammar
-              </button>
+      {editor && (
+        <BubbleMenu
+          editor={editor}
+          options={{
+            placement: "top-start",
+          }}
+          className="flex items-center gap-1 p-1 bg-zinc-900 border border-zinc-800 shadow-xl rounded-lg overflow-hidden z-50"
+          shouldShow={({ editor, from, to }: any) => {
+            const state = aiStateRef.current;
+            if (
+              state?.isAiProcessing ||
+              state?.suggestedText ||
+              state?.isAiMenuExpanded
+            )
+              return true;
+            return from !== to && !editor.isActive("ghostNote");
+          }}
+        >
+          {isAiProcessing ? (
+            <div className="flex flex-col gap-2 p-3 min-w-[200px]">
+              <div className="flex items-center gap-2 text-sm text-indigo-400 font-medium">
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                Processing...
+              </div>
+              {originalText && (
+                <p className="text-xs text-zinc-500 truncate max-w-[250px] italic">
+                  "{originalText}"
+                </p>
+              )}
             </div>
-
-            <div className="text-xs text-zinc-500 mb-2 uppercase tracking-wider font-semibold">
-              Or provide a custom prompt:
-            </div>
-            <textarea
-              value={aiPrompt}
-              onChange={(e) => setAiPrompt(e.target.value)}
-              className="w-full h-20 bg-zinc-950 border border-zinc-800 rounded p-2 text-sm text-zinc-300 focus:outline-none focus:border-indigo-500/50 resize-none mb-3 placeholder-zinc-600"
-              placeholder="e.g., Rewrite this in the style of Edgar Allan Poe..."
-              autoFocus
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  if (aiPrompt.trim()) handleAiAction("custom", aiPrompt);
-                }
-              }}
-            />
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] text-zinc-500">
-                {isAiProcessing ? "Processing..." : "Press Enter to submit"}
-              </span>
-              <div className="flex items-center justify-end gap-2">
+          ) : suggestedText ? (
+            <div className="flex flex-col gap-2 p-2 w-80 max-h-[400px] overflow-y-auto">
+              <div className="flex items-center justify-between text-xs text-zinc-400 mb-1">
+                <span className="flex items-center gap-1 font-medium text-indigo-400">
+                  <Wand2 className="w-3.5 h-3.5" /> AI Suggestion
+                </span>
                 <button
-                  onClick={() => {
-                    setShowAiModal(false);
-                    setAiPrompt("");
-                    editor.commands.focus();
-                  }}
-                  disabled={isAiProcessing}
-                  className="px-3 py-1.5 rounded text-sm text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 transition-colors disabled:opacity-50"
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={handleCancelAi}
+                  className="hover:text-zinc-200"
                 >
-                  Cancel
+                  ✕
+                </button>
+              </div>
+              <div className="flex flex-col gap-2">
+                <div className="bg-zinc-950/50 border border-zinc-800/50 rounded p-2">
+                  <div className="text-[10px] text-zinc-500 uppercase font-semibold mb-1">
+                    Original
+                  </div>
+                  <p className="text-xs text-zinc-400 line-through decoration-red-500/50">
+                    {originalText}
+                  </p>
+                </div>
+                <div className="bg-indigo-500/10 border border-indigo-500/20 rounded p-2">
+                  <div className="text-[10px] text-indigo-400 uppercase font-semibold mb-1">
+                    Suggested
+                  </div>
+                  <p className="text-xs text-zinc-200">{suggestedText}</p>
+                </div>
+              </div>
+              <div className="flex items-center justify-end gap-2 mt-2">
+                <button
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={handleCancelAi}
+                  className="px-3 py-1.5 rounded text-xs text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 transition-colors"
+                >
+                  Discard
                 </button>
                 <button
-                  onClick={() => handleAiAction("custom", aiPrompt)}
-                  disabled={!aiPrompt.trim() || isAiProcessing}
-                  className="px-4 py-1.5 rounded text-sm bg-indigo-600 hover:bg-indigo-500 text-white font-medium transition-colors flex items-center gap-2 disabled:opacity-50"
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={handleAcceptAi}
+                  className="px-3 py-1.5 rounded text-xs bg-indigo-600 hover:bg-indigo-500 text-white font-medium transition-colors"
                 >
-                  {isAiProcessing ? (
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  ) : (
-                    <Wand2 className="w-3.5 h-3.5" />
-                  )}
+                  Accept & Replace
+                </button>
+              </div>
+            </div>
+          ) : isAiMenuExpanded ? (
+            <div className="flex flex-col gap-2 p-2 w-72">
+              <div className="flex items-center justify-between text-xs text-zinc-400 mb-1">
+                <span className="flex items-center gap-1 font-medium text-indigo-400">
+                  <Wand2 className="w-3.5 h-3.5" /> AI Magic Wand
+                </span>
+                <button
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => setIsAiMenuExpanded(false)}
+                  className="hover:text-zinc-200"
+                >
+                  ✕
+                </button>
+              </div>
+              <div className="grid grid-cols-2 gap-1">
+                <button
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => handleAiAction("shorter")}
+                  className="px-2 py-1.5 bg-zinc-800 hover:bg-indigo-500/20 text-zinc-300 hover:text-indigo-300 rounded text-xs transition-colors text-left"
+                >
+                  Make Shorter
+                </button>
+                <button
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => handleAiAction("descriptive")}
+                  className="px-2 py-1.5 bg-zinc-800 hover:bg-indigo-500/20 text-zinc-300 hover:text-indigo-300 rounded text-xs transition-colors text-left"
+                >
+                  More Descriptive
+                </button>
+                <button
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => handleAiAction("grammar")}
+                  className="px-2 py-1.5 bg-zinc-800 hover:bg-indigo-500/20 text-zinc-300 hover:text-indigo-300 rounded text-xs transition-colors text-left"
+                >
+                  Fix Grammar
+                </button>
+                <button
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => handleAiAction("past_tense")}
+                  className="px-2 py-1.5 bg-zinc-800 hover:bg-indigo-500/20 text-zinc-300 hover:text-indigo-300 rounded text-xs transition-colors text-left"
+                >
+                  Past Tense
+                </button>
+              </div>
+              <textarea
+                value={aiPrompt}
+                onChange={(e) => setAiPrompt(e.target.value)}
+                placeholder="e.g., Rewrite this in the style of Edgar Allan Poe..."
+                className="w-full bg-zinc-950 border border-zinc-800 rounded p-1.5 text-xs text-zinc-300 focus:outline-none focus:border-indigo-500/50 resize-none"
+                rows={2}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    if (aiPrompt.trim()) {
+                      handleAiAction("custom", aiPrompt);
+                    }
+                  }
+                }}
+              />
+              <div className="flex items-center justify-between mt-1">
+                <span className="text-[10px] text-zinc-500">
+                  Press Enter to submit
+                </span>
+                <button
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => {
+                    if (aiPrompt.trim()) {
+                      handleAiAction("custom", aiPrompt);
+                    }
+                  }}
+                  disabled={!aiPrompt.trim()}
+                  className="px-2 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded text-[10px] font-medium transition-colors disabled:opacity-50"
+                >
                   Generate
                 </button>
               </div>
             </div>
-          </div>
-        </div>
+          ) : (
+            <button
+              type="button"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => {
+                setIsAiMenuExpanded(true);
+                setAiSelection({
+                  from: editor.state.selection.from,
+                  to: editor.state.selection.to,
+                });
+              }}
+              className="px-2 py-1.5 text-indigo-400 hover:bg-indigo-500/20 hover:text-indigo-300 rounded text-sm transition-colors flex items-center gap-1.5 font-medium"
+              title="AI Magic Wand"
+            >
+              <Wand2 className="w-3.5 h-3.5" />
+              AI
+            </button>
+          )}
+        </BubbleMenu>
       )}
 
       {showNoteModal && (
@@ -535,39 +717,18 @@ export function Editor({
           </button>
           <div className="w-px h-6 bg-zinc-700" />
 
-          {editor &&
-            !editor.state.selection.empty &&
-            !editor.isActive("ghostNote") && (
-              <button
-                onClick={() => setShowAiModal(true)}
-                className={`px-3 py-1 rounded text-sm transition-colors flex items-center gap-1.5 ${
-                  showAiModal || isAiProcessing
-                    ? "bg-indigo-500/20 text-indigo-400"
-                    : "bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-indigo-400"
-                }`}
-                title="AI Magic Wand"
-              >
-                {isAiProcessing ? (
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                ) : (
-                  <Wand2 className="w-3.5 h-3.5" />
-                )}
-                AI Edit
-              </button>
-            )}
-
           <button
             onClick={() => {
-              if (editor.isActive("ghostNote")) {
+              if (isGhostNote) {
                 setNoteText(editor.getAttributes("ghostNote").comment || "");
                 setShowNoteModal(true);
-              } else if (!editor.state.selection.empty) {
+              } else if (hasSelection) {
                 setNoteText("");
                 setShowNoteModal(true);
               }
             }}
             className={`px-3 py-1 rounded text-sm transition-colors flex items-center gap-1.5 ${
-              editor.isActive("ghostNote")
+              isGhostNote
                 ? "bg-amber-500/20 text-amber-400"
                 : "bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-amber-400"
             }`}

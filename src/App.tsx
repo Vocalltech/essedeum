@@ -28,6 +28,7 @@ import { StatusBar } from "./components/layout/StatusBar";
 import { PlanWorkspace } from "./components/workspaces/PlanWorkspace";
 import { ExportWorkspace } from "./components/workspaces/ExportWorkspace";
 import { WorldWorkspace } from "./components/workspaces/WorldWorkspace";
+import { STORY_TEMPLATES } from "./lib/templates";
 import { BinderTree } from "./components/workspaces/BinderTree";
 import { SnapshotPanel } from "./components/workspaces/SnapshotPanel";
 import { LoreReferencePanel } from "./components/workspaces/LoreReferencePanel";
@@ -337,6 +338,40 @@ function App() {
     }
   };
 
+  const handleGenerateStructure = async (templateKey: string) => {
+    if (!currentProject?.id) return;
+    try {
+      const template = STORY_TEMPLATES[templateKey];
+      if (!template) return;
+
+      const siblings = chapters.filter((c) => c.parent_id === null);
+      const startingOrder = siblings.length;
+
+      const newChapters: Chapter[] = [];
+      for (let i = 0; i < template.length; i++) {
+        const beat = template[i];
+        const newChapter: Chapter = {
+          project_id: currentProject.id,
+          title: beat.title,
+          content: "",
+          synopsis: beat.synopsis,
+          sort_order: startingOrder + i,
+          parent_id: null,
+          type: "document",
+        };
+        const id = await saveChapter(newChapter);
+        newChapters.push({ ...newChapter, id });
+      }
+
+      setChapters([...chapters, ...newChapters]);
+      if (newChapters.length > 0 && !selectedChapter) {
+        setSelectedChapter(newChapters[0]);
+      }
+    } catch (error) {
+      console.error("Failed to generate structure:", error);
+    }
+  };
+
   // Add a new chapter or folder
   const handleAddChapter = async (
     parentIdOrEvent?: number | null | any,
@@ -607,6 +642,7 @@ function App() {
           <PlanWorkspace
             chapters={chapters}
             onUpdateChapter={handleUpdateChapter}
+            onGenerateStructure={handleGenerateStructure}
           />
         )}
         {currentProject && activeMode === "export" && (
