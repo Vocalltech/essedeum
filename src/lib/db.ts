@@ -95,6 +95,23 @@ export interface ChatMemory {
   created_at?: string;
 }
 
+export interface ChatSession {
+  id?: number;
+  project_id: number;
+  title: string;
+  persona: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface ChatMessage {
+  id?: number;
+  session_id: number;
+  role: "user" | "assistant" | "system";
+  content: string;
+  created_at?: string;
+}
+
 export interface MapPin {
   id?: number;
   project_id: number;
@@ -229,6 +246,29 @@ export async function initDB(): Promise<void> {
         type TEXT NOT NULL DEFAULT 'ai_insight',
         created_at TEXT NOT NULL DEFAULT (datetime('now')),
         FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
+      )
+    `);
+
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS chat_sessions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        project_id INTEGER NOT NULL,
+        title TEXT NOT NULL,
+        persona TEXT NOT NULL,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+        FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
+      )
+    `);
+
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS chat_messages (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        session_id INTEGER NOT NULL,
+        role TEXT NOT NULL,
+        content TEXT NOT NULL,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        FOREIGN KEY (session_id) REFERENCES chat_sessions(id) ON DELETE CASCADE
       )
     `);
 
@@ -874,6 +914,110 @@ export async function deleteMapPin(id: number): Promise<void> {
     await database.execute("DELETE FROM map_pins WHERE id = ?", [id]);
   } catch (error) {
     console.error("Failed to delete map pin:", error);
+    throw error;
+  }
+}
+
+// ==================== CHAT HISTORY OPERATIONS ====================
+
+export async function getChatSessions(
+  projectId: number,
+): Promise<ChatSession[]> {
+  const database = await ensureDB();
+  try {
+    return await database.select<ChatSession[]>(
+      "SELECT * FROM chat_sessions WHERE project_id = ? ORDER BY updated_at DESC",
+      [projectId],
+    );
+  } catch (error) {
+    console.error("Failed to load chat sessions:", error);
+    throw error;
+  }
+}
+
+export async function createChatSession(
+  projectId: number,
+  title: string,
+  persona: string,
+): Promise<ChatSession> {
+  const database = await ensureDB();
+  try {
+    const result = await database.execute(
+      "INSERT INTO chat_sessions (project_id, title, persona) VALUES (?, ?, ?)",
+      [projectId, title, persona],
+    );
+    return {
+      id: result.lastInsertId,
+      project_id: projectId,
+      title,
+      persona,
+    };
+  } catch (error) {
+    console.error("Failed to create chat session:", error);
+    throw error;
+  }
+}
+
+export async function updateChatSessionTitle(
+  id: number,
+  title: string,
+): Promise<void> {
+  const database = await ensureDB();
+  try {
+    await database.execute(
+      "UPDATE chat_sessions SET title = ?, updated_at = datetime('now') WHERE id = ?",
+      [title, id],
+    );
+  } catch (error) {
+    console.error("Failed to update chat session title:", error);
+    throw error;
+  }
+}
+
+export async function deleteChatSession(id: number): Promise<void> {
+  const database = await ensureDB();
+  try {
+    await database.execute("DELETE FROM chat_sessions WHERE id = ?", [id]);
+  } catch (error) {
+    console.error("Failed to delete chat session:", error);
+    throw error;
+  }
+}
+
+export async function getChatMessages(
+  sessionId: number,
+): Promise<ChatMessage[]> {
+  const database = await ensureDB();
+  try {
+    return await database.select<ChatMessage[]>(
+      "SELECT * FROM chat_messages WHERE session_id = ? ORDER BY id ASC",
+      [sessionId],
+    );
+  } catch (error) {
+    console.error("Failed to load chat messages:", error);
+    throw error;
+  }
+}
+
+export async function saveChatMessage(
+  message: Omit<ChatMessage, "id">,
+): Promise<ChatMessage> {
+  const database = await ensureDB();
+  try {
+    const result = await database.execute(
+      "INSERT INTO chat_messages (session_id, role, content) VALUES (?, ?, ?)",
+      [message.session_id, message.role, message.content],
+    );
+
+    // Update the session's updated_at timestamp
+    await database.execute(
+      "UPDATE chat_sessions SET updated_at = datetime('now') WHERE id = ?",
+      [message.session_id],
+    );
+
+    return { ...message, id: result.lastInsertId } as ChatMessage;
+  } catch (error) {
+    console.error("Failed to save chat message:", error);
     throw error;
   }
 }

@@ -15,6 +15,8 @@ import {
   Edit2,
   Check,
   X,
+  History,
+  Plus,
 } from "lucide-react";
 import {
   Lore,
@@ -25,6 +27,12 @@ import {
   updateMemory,
   deleteMemory,
   MemoryType,
+  ChatSession,
+  getChatSessions,
+  createChatSession,
+  deleteChatSession,
+  getChatMessages,
+  saveChatMessage,
 } from "../lib/db";
 import {
   generateUnifiedContext,
@@ -36,8 +44,8 @@ import {
 } from "../lib/ai";
 
 interface Message {
-  id: string;
-  role: "user" | "assistant";
+  id: string | number;
+  role: "user" | "assistant" | "system";
   content: string;
   timestamp: Date;
   saved?: boolean; // Whether this message has been saved to memory
@@ -67,6 +75,9 @@ export function AIChatPanel({
   loreEntries,
   relationships,
 }: AIChatPanelProps) {
+  const [sessions, setSessions] = useState<ChatSession[]>([]);
+  const [currentSessionId, setCurrentSessionId] = useState<number | null>(null);
+  const [showSessions, setShowSessions] = useState(false);
   const [apiKey, setApiKey] = useState<string>("");
   const [apiKeyInput, setApiKeyInput] = useState<string>("");
   const [messages, setMessages] = useState<Message[]>([]);
@@ -85,9 +96,11 @@ export function AIChatPanel({
 
   // Memory state
   const [memories, setMemories] = useState<ChatMemory[]>([]);
-  const [savingMemoryId, setSavingMemoryId] = useState<string | null>(null);
+  const [savingMemoryId, setSavingMemoryId] = useState<string | number | null>(
+    null,
+  );
   const [showMemoryTypeDropdown, setShowMemoryTypeDropdown] = useState<
-    string | null
+    string | number | null
   >(null);
 
   // Context state
@@ -121,7 +134,52 @@ export function AIChatPanel({
     }
 
     loadMemories();
+    loadSessions();
   }, [projectId]);
+
+  const loadSessions = async () => {
+    try {
+      const allSessions = await getChatSessions(projectId);
+      setSessions(allSessions);
+      if (allSessions.length > 0) {
+        // Optionally load the most recent session
+        // loadSession(allSessions[0].id!);
+      } else {
+        setMessages([]);
+        setCurrentSessionId(null);
+      }
+    } catch (error) {
+      console.error("Failed to load chat sessions:", error);
+    }
+  };
+
+  const loadSession = async (sessionId: number) => {
+    try {
+      const sessionMessages = await getChatMessages(sessionId);
+      setMessages(
+        sessionMessages.map((m) => ({
+          id: m.id!,
+          role: m.role as "user" | "assistant" | "system",
+          content: m.content,
+          timestamp: m.created_at ? new Date(m.created_at) : new Date(),
+        })),
+      );
+      setCurrentSessionId(sessionId);
+
+      const session = sessions.find((s) => s.id === sessionId);
+      if (session) {
+        setSelectedPersona(session.persona as PersonaType);
+      }
+    } catch (error) {
+      console.error("Failed to load session messages:", error);
+    }
+  };
+
+  const handleNewSession = () => {
+    setMessages([]);
+    setCurrentSessionId(null);
+    setShowSessions(false);
+  };
 
   // Load memories
   const loadMemories = async () => {
@@ -183,6 +241,7 @@ export function AIChatPanel({
   const handleClearChat = () => {
     setMessages([]);
     setError(null);
+    setCurrentSessionId(null);
   };
 
   const handleSelectPersona = (persona: PersonaType) => {
@@ -201,7 +260,7 @@ export function AIChatPanel({
   };
 
   const handleSaveToMemory = async (
-    messageId: string,
+    messageId: string | number,
     content: string,
     type: MemoryType,
   ) => {
@@ -272,8 +331,40 @@ export function AIChatPanel({
       return;
     }
 
+    let sessionId = currentSessionId;
+
+    if (!sessionId) {
+      try {
+        const title = input.trim().substring(0, 30) + "...";
+        const newSession = await createChatSession(
+          projectId,
+          title,
+          selectedPersona,
+        );
+        sessionId = newSession.id!;
+        setCurrentSessionId(sessionId);
+        setSessions((prev) => [newSession, ...prev]);
+      } catch (err) {
+        console.error("Failed to create chat session:", err);
+        setError("Failed to create chat session");
+        return;
+      }
+    }
+
+    let savedUserMessageId: number | undefined;
+    try {
+      const savedUserMessage = await saveChatMessage({
+        session_id: sessionId,
+        role: "user",
+        content: input.trim(),
+      });
+      savedUserMessageId = savedUserMessage.id;
+    } catch (err) {
+      console.error("Failed to save user message:", err);
+    }
+
     const userMessage: Message = {
-      id: `user-${Date.now()}`,
+      id: savedUserMessageId || `user-${Date.now()}`,
       role: "user",
       content: input.trim(),
       timestamp: new Date(),
@@ -321,12 +412,15 @@ export function AIChatPanel({
       };
       setMessages((prev) => [...prev, assistantMessage]);
 
+      let fullAssistantContent = "";
+
       await streamGeminiResponse({
         apiKey,
         context,
         userPrompt: userMessage.content,
         currentText: currentContent,
         onChunk: (chunk) => {
+          fullAssistantContent += chunk;
           setMessages((prev) =>
             prev.map((msg) =>
               msg.id === assistantMessageId
@@ -336,6 +430,25 @@ export function AIChatPanel({
           );
         },
       });
+
+      if (sessionId) {
+        try {
+          const savedAssistantMessage = await saveChatMessage({
+            session_id: sessionId,
+            role: "assistant",
+            content: fullAssistantContent,
+          });
+          setMessages((prev) =>
+            prev.map((msg) =>
+              msg.id === assistantMessageId
+                ? { ...msg, id: savedAssistantMessage.id! }
+                : msg,
+            ),
+          );
+        } catch (err) {
+          console.error("Failed to save assistant message:", err);
+        }
+      }
     } catch (err) {
       console.error("AI response error:", err);
       setError(
@@ -527,6 +640,87 @@ ${currentContent}`;
     <div className="h-full flex flex-col relative">
       {/* Header with Persona Selector */}
       <div className="px-4 py-3 border-b border-zinc-800 space-y-3 relative z-40 bg-zinc-900">
+        {/* Sessions Panel Overlay */}
+        {showSessions && (
+          <div className="absolute left-0 right-0 top-full bg-zinc-900 border-b border-zinc-800 p-4 max-h-96 overflow-y-auto text-sm shadow-2xl z-50">
+            <div className="flex items-center justify-between mb-4 pb-2 border-b border-zinc-800">
+              <h3 className="font-medium text-zinc-100 flex items-center gap-2">
+                <History className="w-4 h-4 text-amber-400" />
+                Chat History
+              </h3>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={handleNewSession}
+                  className="text-xs text-amber-400 hover:text-amber-300 font-medium"
+                >
+                  New Chat
+                </button>
+                <button
+                  onClick={() => setShowSessions(false)}
+                  className="text-xs text-zinc-400 hover:text-zinc-200"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              {sessions.length > 0 ? (
+                sessions.map((session) => (
+                  <div
+                    key={`session-${session.id}`}
+                    className={`group flex items-center justify-between p-2 rounded-lg cursor-pointer transition-colors ${currentSessionId === session.id ? "bg-amber-500/10 border border-amber-500/20" : "hover:bg-zinc-800/50 border border-transparent"}`}
+                    onClick={() => {
+                      loadSession(session.id!);
+                      setShowSessions(false);
+                    }}
+                  >
+                    <div className="flex items-center gap-3 overflow-hidden">
+                      <span className="text-lg">
+                        {PERSONAS[session.persona as PersonaType]?.icon || "🤖"}
+                      </span>
+                      <div className="flex flex-col overflow-hidden">
+                        <span className="text-zinc-200 truncate font-medium">
+                          {session.title}
+                        </span>
+                        <span className="text-xs text-zinc-500">
+                          {new Date(
+                            session.updated_at ||
+                              session.created_at ||
+                              Date.now(),
+                          ).toLocaleDateString()}
+                        </span>
+                      </div>
+                    </div>
+                    <button
+                      onClick={async (e) => {
+                        e.stopPropagation();
+                        if (session.id) {
+                          await deleteChatSession(session.id);
+                          setSessions(
+                            sessions.filter((s) => s.id !== session.id),
+                          );
+                          if (currentSessionId === session.id) {
+                            handleNewSession();
+                          }
+                        }
+                      }}
+                      className="p-1 text-zinc-500 hover:text-red-400 rounded opacity-0 group-hover:opacity-100"
+                      title="Delete chat"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ))
+              ) : (
+                <p className="text-zinc-500 text-center italic py-4 bg-zinc-800/30 rounded-lg">
+                  No chat history yet.
+                </p>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Context Management Panel Overlay */}
         {showContextManagement && (
           <div className="absolute left-0 right-0 top-full bg-zinc-900 border-b border-zinc-800 p-4 max-h-96 overflow-y-auto text-sm shadow-2xl z-50">
@@ -727,7 +921,20 @@ ${currentContent}`;
           </div>
           <div className="flex items-center gap-1">
             <button
-              onClick={() => setShowContextManagement(!showContextManagement)}
+              onClick={() => {
+                setShowSessions(!showSessions);
+                setShowContextManagement(false);
+              }}
+              className={`p-1.5 rounded transition-colors ${showSessions ? "text-amber-400 bg-amber-400/10" : "text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800"}`}
+              title="Chat History"
+            >
+              <History className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => {
+                setShowContextManagement(!showContextManagement);
+                setShowSessions(false);
+              }}
               className={`p-1.5 rounded transition-colors ${showContextManagement ? "text-amber-400 bg-amber-400/10" : "text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800"}`}
               title="Manage Context"
             >
@@ -736,9 +943,9 @@ ${currentContent}`;
             <button
               onClick={handleClearChat}
               className="p-1.5 rounded text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800 transition-colors"
-              title="Clear chat"
+              title="New Chat"
             >
-              <Trash2 className="w-4 h-4" />
+              <Plus className="w-4 h-4" />
             </button>
             <button
               onClick={handleClearApiKey}
