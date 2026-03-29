@@ -22,6 +22,7 @@ export interface Project {
   name: string;
   description: string;
   kanban_columns?: string;
+  map_image_data?: string;
   created_at?: string;
   updated_at?: string;
 }
@@ -107,6 +108,7 @@ export interface ChatSession {
 export interface ChatMessage {
   id?: number;
   session_id: number;
+  project_id?: number;
   role: "user" | "assistant" | "system";
   content: string;
   created_at?: string;
@@ -151,6 +153,13 @@ export async function initDB(): Promise<void> {
       await db.execute(
         'ALTER TABLE projects ADD COLUMN kanban_columns TEXT NOT NULL DEFAULT \'["To-Do","First Draft","Revising","Ready for Edit","Final"]\'',
       );
+    } catch (e) {
+      // Column likely already exists
+    }
+
+    // Migration for map_image_data column
+    try {
+      await db.execute("ALTER TABLE projects ADD COLUMN map_image_data TEXT");
     } catch (e) {
       // Column likely already exists
     }
@@ -265,12 +274,23 @@ export async function initDB(): Promise<void> {
       CREATE TABLE IF NOT EXISTS chat_messages (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         session_id INTEGER NOT NULL,
+        project_id INTEGER NOT NULL,
         role TEXT NOT NULL,
         content TEXT NOT NULL,
         created_at TEXT NOT NULL DEFAULT (datetime('now')),
-        FOREIGN KEY (session_id) REFERENCES chat_sessions(id) ON DELETE CASCADE
+        FOREIGN KEY (session_id) REFERENCES chat_sessions(id) ON DELETE CASCADE,
+        FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
       )
     `);
+
+    // Migration for project_id in chat_messages
+    try {
+      await db.execute(
+        "ALTER TABLE chat_messages ADD COLUMN project_id INTEGER REFERENCES projects(id) ON DELETE CASCADE",
+      );
+    } catch (e) {
+      // Column likely already exists
+    }
 
     await db.execute(`
       CREATE TABLE IF NOT EXISTS map_pins (
@@ -350,6 +370,22 @@ export async function updateProjectKanbanColumns(
     );
   } catch (error) {
     console.error("Failed to update project kanban columns:", error);
+    throw error;
+  }
+}
+
+export async function updateProjectMap(
+  id: number,
+  mapImageData: string | null,
+): Promise<void> {
+  const database = await ensureDB();
+  try {
+    await database.execute(
+      "UPDATE projects SET map_image_data = ?, updated_at = datetime('now') WHERE id = ?",
+      [mapImageData, id],
+    );
+  } catch (error) {
+    console.error("Failed to update project map:", error);
     throw error;
   }
 }
@@ -1005,8 +1041,8 @@ export async function saveChatMessage(
   const database = await ensureDB();
   try {
     const result = await database.execute(
-      "INSERT INTO chat_messages (session_id, role, content) VALUES (?, ?, ?)",
-      [message.session_id, message.role, message.content],
+      "INSERT INTO chat_messages (session_id, project_id, role, content) SELECT ?, project_id, ?, ? FROM chat_sessions WHERE id = ?",
+      [message.session_id, message.role, message.content, message.session_id],
     );
 
     // Update the session's updated_at timestamp

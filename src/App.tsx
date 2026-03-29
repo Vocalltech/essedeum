@@ -318,6 +318,7 @@ function App() {
   useEffect(() => {
     if (currentProject?.id) {
       loadProjectData(currentProject.id);
+      setMapImageData(currentProject.map_image_data || undefined);
       setShowProjectSelector(false);
     } else {
       setChapters([]);
@@ -327,6 +328,7 @@ function App() {
       setSelectedChapter(null);
       setSelectedLore(null);
       setOpenTabs([]);
+      setMapImageData(undefined);
     }
   }, [currentProject?.id]);
 
@@ -833,7 +835,21 @@ function App() {
   // Handle map upload
   const handleMapUpload = async (imageData: string) => {
     setMapImageData(imageData);
-    // TODO: Persist map to database when we add project-level map storage
+    if (currentProject?.id) {
+      try {
+        const { updateProjectMap } = await import("./lib/db");
+        await updateProjectMap(currentProject.id, imageData);
+        const updatedProject = { ...currentProject, map_image_data: imageData };
+        setCurrentProject(updatedProject);
+        setProjects(
+          projects.map((p) =>
+            p.id === currentProject.id ? updatedProject : p,
+          ),
+        );
+      } catch (err) {
+        console.error("Failed to save map to database:", err);
+      }
+    }
   };
 
   if (isLoading) {

@@ -155,15 +155,22 @@ export function AIChatPanel({
 
   const loadSession = async (sessionId: number) => {
     try {
+      setError(null);
       const sessionMessages = await getChatMessages(sessionId);
-      setMessages(
-        sessionMessages.map((m) => ({
-          id: m.id!,
-          role: m.role as "user" | "assistant" | "system",
-          content: m.content,
-          timestamp: m.created_at ? new Date(m.created_at) : new Date(),
-        })),
-      );
+
+      if (!sessionMessages || sessionMessages.length === 0) {
+        setMessages([]);
+      } else {
+        setMessages(
+          sessionMessages.map((m) => ({
+            id: m.id!,
+            role: m.role as "user" | "assistant" | "system",
+            content: m.content,
+            timestamp: m.created_at ? new Date(m.created_at) : new Date(),
+          })),
+        );
+      }
+
       setCurrentSessionId(sessionId);
 
       const session = sessions.find((s) => s.id === sessionId);
@@ -172,6 +179,14 @@ export function AIChatPanel({
       }
     } catch (error) {
       console.error("Failed to load session messages:", error);
+      setError(
+        "Failed to load chat history: " +
+          (error instanceof Error
+            ? error.message
+            : typeof error === "string"
+              ? error
+              : JSON.stringify(error)),
+      );
     }
   };
 
@@ -325,6 +340,8 @@ export function AIChatPanel({
   const handleSend = async () => {
     if (!input.trim() || isLoading) return;
 
+    setError(null);
+
     // Validate character simulator has a character selected
     if (selectedPersona === "character_simulator" && !selectedCharacter) {
       setError("Please select a character for the Character Simulator");
@@ -361,6 +378,14 @@ export function AIChatPanel({
       savedUserMessageId = savedUserMessage.id;
     } catch (err) {
       console.error("Failed to save user message:", err);
+      setError(
+        "Failed to save user message: " +
+          (err instanceof Error
+            ? err.message
+            : typeof err === "string"
+              ? err
+              : JSON.stringify(err)),
+      );
     }
 
     const userMessage: Message = {
@@ -373,7 +398,6 @@ export function AIChatPanel({
     setMessages((prev) => [...prev, userMessage]);
     setInput("");
     setIsLoading(true);
-    setError(null);
 
     try {
       // Filter context based on selection
@@ -447,6 +471,14 @@ export function AIChatPanel({
           );
         } catch (err) {
           console.error("Failed to save assistant message:", err);
+          setError(
+            "Failed to save AI response: " +
+              (err instanceof Error
+                ? err.message
+                : typeof err === "string"
+                  ? err
+                  : JSON.stringify(err)),
+          );
         }
       }
     } catch (err) {
